@@ -296,6 +296,17 @@ export default function ecranRegister(){
                     updateAt:maintenant,
                 })
             }
+            // Après la création de l'établissement
+            const vercelUrl = "https://cashback-proprete-pjiz0pwuj-matchimvanel-gifs-projects.vercel.app/api/update-montant-contrat";
+
+            fetch(vercelUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+            })
+            .then(res => res.json())
+            .then(data => console.log("Renouvellement vérifié :", data))
+            .catch(err => console.log("Erreur renouvellement :", err));
             // ÉTAPE 4 — Marquer le code comme utilisé
             if (role === 'responsable') {
                 const codeAVerifier =codeResponsable

@@ -18,24 +18,33 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const maintenant = new Date();
-    const trenteJoursAvant = new Date(maintenant.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    const snapshot = await db.collection('etablissements')
-      .where('dateRenouvellement', '<=', trenteJoursAvant)
-      .get();
-
+    const snapshot = await db.collection('etablissements').get();
     let updatedCount = 0;
     const batch = db.batch();
+    const maintenant = new Date();
 
     snapshot.forEach((doc) => {
-      const nouvelleDate = new Date(maintenant.getTime() + 30 * 24 * 60 * 60 * 1000);
-      batch.update(doc.ref, {
-        montantContrat: 25000,
-        dateRenouvellement: nouvelleDate,
-        updatedAt: maintenant,
-      });
-      updatedCount++;
+      const data = doc.data();
+      const updates: any = {};
+
+      // Ajouter les champs manquants
+      if (data.montantContrat === undefined) {
+        updates.montantContrat = 25000;
+      }
+      if (data.dateRenouvellement === undefined) {
+        updates.dateRenouvellement = new Date(maintenant.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 jours
+      }
+      if (data.createdAt === undefined) {
+        updates.createdAt = maintenant;
+      }
+      if (data.updatedAt === undefined) {
+        updates.updatedAt = maintenant;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        batch.update(doc.ref, updates);
+        updatedCount++;
+      }
     });
 
     await batch.commit();
@@ -43,7 +52,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       success: true,
       updatedCount,
-      message: `${updatedCount} établissements ont été renouvelés.`,
+      message: `${updatedCount} établissements mis à jour avec les champs manquants.`
     });
   } catch (error: any) {
     console.error(error);
