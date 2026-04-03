@@ -24,5 +24,9 @@
   "devDependencies": {
     "@types/react": "^19.2.14",
     "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "vercel-build": "echo 'Vercel build for API only'",
+    "build": "echo 'Build skipped for React Native project'"
   }
 }
