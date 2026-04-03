@@ -1,0 +1,24 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "depots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "id_citoyen",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    }
+  ],
+  "fieldOverrides": []
+}

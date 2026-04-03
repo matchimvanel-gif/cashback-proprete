@@ -1,0 +1,200 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ================================================================
+    // FONCTIONS UTILITAIRES firebase deploy --only firestore:rules // firebase deploy --only firestore:rules --debug
+    // ================================================================
+
+    function estConnecte() {
+      return request.auth != null;
+    }
+
+    function monRole() {
+      return get(/databases/$(database)/documents/utilisateurs/$(request.auth.uid)).data.role;
+    }
+
+    function estCitoyen()       { return estConnecte() && monRole() == 'citoyen'; }
+    function estResponsable()   { return estConnecte() && monRole() == 'responsable'; }
+    function estEtablissement() { return estConnecte() && monRole() == 'etablissement'; }
+    function estHyzakam()       { return estConnecte() && monRole() == 'hyzakam'; }
+    function estMairie()        { return estConnecte() && monRole() == 'mairie'; }
+    function estAdmin()         { return estHyzakam() || estMairie(); }
+
+    function estProprietaire(userId) {
+      return estConnecte() && request.auth.uid == userId;
+    }
+
+    // ================================================================
+    // COLLECTION : utilisateurs
+    // ================================================================
+    match /utilisateurs/{userId} {
+
+      allow read: if true;
+
+      allow create: if true;
+
+      allow update: if true;
+
+      allow delete: if false;
+    }
+
+    // ================================================================
+    // COLLECTION : invitations_hysakam
+    // ================================================================
+    match /invitations_hysakam/{invitationId} {
+
+      allow get : if true;
+
+      allow list: if false;
+
+      allow create: if estHyzakam()
+                    && request.resource.data.keys().hasAll(['expire_le', 'utilise', 'role'
+                     ])
+                    && request.resource.data.role in ['responsable', 'etablissement']
+                    && request.resource.data.utilise == false;
+
+      allow update: if estHyzakam()
+                    && request.resource.data.diff(resource.data)
+                       .affectedKeys().hasOnly(['utilise'])
+                    && resource.data.utilise         == false
+                    && request.resource.data.utilise == true;
+
+      allow delete: if false;
+    }
+
+    // ================================================================
+    // COLLECTION : depots
+    // ================================================================
+    match /depots/{depotId} {
+
+      allow read: if (estCitoyen()     && resource.data.id_citoyen == request.auth.uid)
+                  || (estResponsable() && resource.data.id_agent   == request.auth.uid)
+                  || estAdmin();
+
+      allow create: if estResponsable()
+                    && request.resource.data.id_agent == request.auth.uid
+                    && request.resource.data.keys().hasAll([
+                       'id_citoyen', 'id_agent', 'valeur_poids',
+                       'points_gagnes', 'date'
+                     ])
+                    && request.resource.data.points_gagnes >= 0
+                    && request.resource.data.valeur_poids  >  0;
+
+      allow update, delete: if false;
+    }
+
+    // ================================================================
+    // COLLECTION : coupons
+    // ================================================================
+    match /coupons/{couponId} {
+
+      allow read: if (estCitoyen()        && resource.data.id_citoyen == request.auth.uid)
+                  || estEtablissement()
+                  || estAdmin();
+
+      allow create: if false;
+
+      allow update: if estEtablissement()
+                    && request.resource.data.diff(resource.data)
+                       .affectedKeys().hasOnly(['statut'])
+                    && resource.data.statut         == 'disponible'
+                    && request.resource.data.statut == 'utilise';
+
+      allow delete: if false;
+    }
+
+    // ================================================================
+    // COLLECTION : etablissements
+    // ================================================================
+    match /etablissements/{etablissementId} {
+      allow read: if true;
+      allow create: if true;
+      allow update : if estEtablissement()|| estHyzakam()
+      allow delete: if estHyzakam();
+    }
+
+    // ================================================================
+    // COLLECTION : configuration
+    // ================================================================
+    match /configuration/{docId} {
+      allow read:  if true;
+      allow write: if estHyzakam();
+    }
+
+    // ================================================================
+    // COLLECTION : cote
+    // ================================================================
+    match /cote/{quartier} {
+      allow read:           if estConnecte();
+      allow create, update: if estAdmin() || estHyzakam();
+      allow delete:         if false;
+    }
+
+    // ================================================================
+    // COLLECTION : signalements
+    // ================================================================
+    match /signalements/{signalementId} {
+
+      allow read: if (estCitoyen()     && resource.data.id_auteur == request.auth.uid)
+                  || (estResponsable() && resource.data.id_auteur == request.auth.uid)
+                  || estHyzakam()
+                  || (estMairie()      && resource.data.type == 'infraction');
+
+      allow create: if (estCitoyen() || estResponsable())
+                    && request.resource.data.id_auteur == request.auth.uid
+                    && request.resource.data.keys().hasAll([
+                       'type', 'id_auteur', 'date', 'traite',
+                       'latitude', 'longitude'
+                     ])
+                    && request.resource.data.type in ['bac_plein', 'infraction']
+                    && request.resource.data.traite == false
+                    && (request.resource.data.type == 'infraction'
+                        || estResponsable());
+
+      allow update: if estHyzakam()
+                    && request.resource.data.diff(resource.data)
+                       .affectedKeys().hasOnly(['traite'])
+                    && resource.data.traite         == false
+                    && request.resource.data.traite == true;
+
+      allow delete: if false;
+    }
+
+    // ================================================================
+    // COLLECTION : alertes
+    // ================================================================
+    match /alertes/{alerteId} {
+      allow read:   if estHyzakam();
+      allow create: if false;
+      allow update: if estHyzakam()
+                    && request.resource.data.diff(resource.data)
+                       .affectedKeys().hasOnly(['traite'])
+                    && resource.data.traite         == false
+                    && request.resource.data.traite == true;
+      allow delete: if false;
+    }
+
+    // ================================================================
+    // COLLECTION : partenaires
+    // ================================================================
+    match /partenaires/{partenaireId} {
+      allow read:if true;
+      allow update: if true;
+      allow delete: if false;
+    }
+
+
+    // ================================================================
+    // COLLECTION : RespoID
+    // ================================================================
+    match /RespoID/{respoID} {
+      allow get: if true;
+      allow update: if true;
+      allow list: if true;
+      allow create: if true;
+      allow delete:if false;
+    }
+
+  }
+}
