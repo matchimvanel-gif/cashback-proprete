@@ -454,6 +454,8 @@ export default function OngletStatistiques() {
                                 padding={{ top: 20, bottom: 65, left: 50, right: 20 }}
                             >
                                 <VictoryAxis
+                                tickValues={donneesDepots.map(i=>i.x)}
+                                
                                     style={{
                                         axis: { stroke: '#ccc' },
                                         tickLabels: {
@@ -623,7 +625,7 @@ export default function OngletStatistiques() {
                                             }}>
                                                 <ScrollView
                                                     horizontal
-                                                    showsHorizontalScrollIndicator={false}
+                                                    showsHorizontalScrollIndicator={true}
                                                 >
                                                     <VictoryChart
                                                         width={600}

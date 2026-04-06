@@ -1,3 +1,3 @@
 export default function ecranCitoyen(){
-    return null
+   return null 
 }
