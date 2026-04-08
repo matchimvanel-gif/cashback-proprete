@@ -1,7 +1,9 @@
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Initialiser Firebase
+console.log("🚀 Début du renouvellement des contrats...");
+
+// Initialiser Firebase Admin
 initializeApp({
   credential: cert({
     projectId: process.env.FIREBASE_PROJECT_ID,
@@ -14,62 +16,50 @@ const db = getFirestore();
 const maintenant = new Date();
 let nombreMisAJour = 0;
 
-// Récupérer tous les établissements
-const snapshot = await db.collection('etablissements').get();
+try {
+  const snapshot = await db.collection('etablissements').get();
 
-for (const doc of snapshot.docs) {
-  const data = doc.data();
-  let doitRenouveler = false;
+  console.log(`📊 ${snapshot.size} établissements trouvés`);
 
-  if (!data.dateRenouvellement) {
-    // Le champ n'existe pas encore
-    doitRenouveler = true;
-    console.log('Champ manquant pour : ' + doc.id);
-  } else {
-    const dateRenouvellement = new Date(data.dateRenouvellement);
-    const differenceJours = (maintenant - dateRenouvellement) / (1000 * 60 * 60 * 24);
-    if (differenceJours > 30) {
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    const docId = doc.id;
+
+    console.log(`🔍 Vérification du document : ${docId}`);
+
+    let doitRenouveler = false;
+
+    if (!data.dateRenouvellement) {
+      console.log(`⚠️  Pas de dateRenouvellement pour ${docId} → renouvellement forcé`);
       doitRenouveler = true;
+    } else {
+      const dateRenouvellement = new Date(data.dateRenouvellement);
+      const differenceJours = (maintenant - dateRenouvellement) / (1000 * 60 * 60 * 24);
+
+      console.log(`📅 Date renouvellement : ${dateRenouvellement.toISOString()} | Différence : ${differenceJours.toFixed(1)} jours`);
+
+      if (differenceJours > 30) {
+        doitRenouveler = true;
+      }
+    }
+
+    if (doitRenouveler) {
+      const nouvelleDate = new Date(maintenant);
+      nouvelleDate.setDate(nouvelleDate.getDate() + 30);
+
+      await doc.ref.set({
+        montantContrat: 25000,
+        dateRenouvellement: nouvelleDate,
+        updatedAt: maintenant
+      }, { merge: true });
+
+      nombreMisAJour++;
+      console.log(`✅ Contrat renouvelé pour ${docId} → nouveau montant 25000`);
     }
   }
 
-  if (doitRenouveler) {
-    const nouvelleDate = new Date(maintenant);
-    nouvelleDate.setDate(nouvelleDate.getDate() + 30);
+  console.log(`🎉 FIN - ${nombreMisAJour} contrat(s) renouvelé(s)`);
 
-    await doc.ref.set({
-      montantContrat: 25000,
-      dateRenouvellement: nouvelleDate.toISOString(),
-      updatedAt: maintenant.toISOString()
-    }, { merge: true });
-
-    nombreMisAJour++;
-    console.log('Contrat renouvelé : ' + doc.id);
-  }
-}
-
-console.log('Terminé - ' + nombreMisAJour + ' contrat(s) renouvelé(s)');
-// ... le reste de ton code reste pareil ...
-
-if (differenceJours > 30) {
-
-  const nouvelleDate = new Date();
-  nouvelleDate.setDate(nouvelleDate.getDate() + 30);
-
-  try {
-    await databases.updateDocument(
-      process.env.APPWRITE_DATABASE_ID || 'cashback-proprete',   // ← change si ton Database ID est différent
-      'etablissements',
-      doc.$id,
-      {
-        montantContrat: 25000,
-        dateRenouvellement: nouvelleDate,           // ← on envoie directement le Date object
-        updatedAt: new Date()
-      }
-    );
-    nombreMisAJour++;
-    log('✅ Contrat renouvelé pour : ' + doc.$id);
-  } catch (err) {
-    error('Erreur mise à jour ' + doc.$id + ' : ' + err.message);
-  }
+} catch (error) {
+  console.error("❌ Erreur générale :", error.message);
 }
