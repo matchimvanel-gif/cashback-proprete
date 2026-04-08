@@ -1,8 +1,9 @@
 {
   "name": "update-montant-contrat1",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.js",
   "dependencies": {
-    "node-appwrite": "^15.0.0"
+    "firebase-admin": "^12.0.0"
   }
 }
