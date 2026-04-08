@@ -176,13 +176,7 @@ service cloud.firestore {
     // ================================================================
     // COLLECTION : RespoID
     // ================================================================
-    match /RespoID/{respoID} {
-      allow get: if true;
-      allow update: if true;
-      allow list: if true;
-      allow create: if true;
-      allow delete:if false;
-    }
+match /RespoID/{respoID} {\n      allow read, list: if estHyzakam() || estResponsable();\n      allow create: if estHyzakam();\n      allow update: if estHyzakam();\n      allow delete: if false;\n    }\n\n    match /bacs/{bacId} {\n      allow read: if estResponsable() && request.auth.uid == bacId;\n      allow read: if estHyzakam();\n      allow create, update: if estHyzakam();\n      allow delete: if false;\n    }
 
   }
 }

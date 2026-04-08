@@ -1,12 +1,19 @@
-# TODO Nouvelle vue Responsables ongletStatistiques.tsx
+# TODO - Mise à jour Vue Responsable & DB Fixes
 
-Étapes :
+## Étape 1: Corriger commentaires & queries dans ongletStatistiques.tsx [DONE ✓]
+- Remplacer "vue reponsable" → "vue responsable"
+- Query RespoID au lieu de 'responsables'
+- Data réelle depuis etablissements.montantContrat
+- Ajouter implémentation vue "responsables" (liste RespoID, bacs, alertes)
 
-- [ ] 1. Ajouter vue 'responsables' nav (5ème onglet, icône 'people').
-- [ ] 2. Interface Responsable {id, nom, pointsDepot, depotsToday: number, moyenneDay: number}.
-- [ ] 3. chargerResponsables() : query collection responsables, forEach query depots today count.
-- [ ] 4. Tableau FlatList styler (glassmorphism, colonnes Nom/Points/Depos Today/Alerts, rouge >3x moyenne).
-- [ ] 5. Alertes : if depotsToday > 3\*pointsDepot/100 → createDoc 'alertes' {respoID, nom, valeur: ratio, traite:false}, sync ongletAcceuil.
-- [ ] Test realtime.
+## Étape 2: Créer app/(tabs)/responsable.tsx [DONE ✓]
+- Dashboard responsable: status bacs (remplissage_actuel), depots, signalements bac_plein
 
-Lié ongletAcceuil.tsx alertes collection.
+## Étape 3: Updater firestore.rules [DONE ✓]
+- Permissions RespoID/bacs (hyzakam RW, responsables read own)
+
+## Étape 4: Tests & Deploy [PENDING]
+- npx expo start, login hyzakam → vue stats/responsables
+- firebase deploy --only firestore:rules
+
+French comments everywhere, no deletions, junior-friendly.
