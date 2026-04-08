@@ -2,8 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Text, View } from "react-native";
-import { couleur, stylesTitre } from "../../../constants/animation";
-import { auth, db } from "../../../firebaseConfig";
+import { couleur, stylesTitre } from "../../constants/animation";
+import { auth, db } from "../../firebaseConfig";
 
 interface Transaction {
   id: string;

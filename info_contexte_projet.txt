@@ -1,0 +1,154 @@
+**Cashback Propreté - Contexte Projet** (Hackathon, scalable)
+**tu connais le mecanisme de vercel guide moi sur le site pour que je le configure selon tes desires et ici dans vs code tu configure mon projet pour que cela fonctionne sur vercel et a chaque fois que tu a besoin d'une information pour rendre mon envirronement fonctionnel dit mois tu connais le mecanisme de vercel guide moi sur le site pour que je le configure selon tes desires et ici dans vs code tu configure mon projet pour que cela fonctionne sur vercel et a chaque fois que tu a besoin d'une information pour rendre mon envirronement fonctionnel dit moi si c'est pas possible d'utiliser vercel donne moi des alternatives pour que mon projet ne depende pas trop des cloud functions jai fait erreur dna sles commentaires je voulais dire vue reponsable**
+**Tech Stack :**
+- Frontend : React Native + Expo SDK 51 + TypeScript
+- Backend : Firebase Firestore + Functions (Node.js)
+- Vercel API routes (api/*.ts)
+- Theme : constants/animation.ts (couleur, stylesTitre)
+
+**Règles .windsurfrules :**
+- Français partout (app + code comments)
+- Ne jamais casser code existant (analyser imports avant modifs)
+- 100% Expo/Node/React compatible
+- Mémoriser TOUTES infos utilisateur → ce fichier
+- infoProjet/ : cahier charges PDF, screenshots DB (cash/)
+- Cloud Functions : documenter code complet + explications junior
+- Firestore.rules → rules_security.txt final
+
+**Collections Firebase** (from screenshots infoProjet/cash/) :
+- utilisateurs : uid, role (citoyen/responsable/etablissement/hyzakam), point, total_reductions,email,nom,point,quartier,ville
+- depots : id_citoyen, id_agent, date, point
+- coupons : id_citoyen, code, points, status (disponible/utilisé/expiré), id_etablissement(c'est l'ui du compte genere par firebase auth c'est pas toi qui genere sa tu vas juste recuperr l'uid de celui qui a le role etablissement),offre,statut,utilise
+- etablissements : createAt (enregistre la date du jour de la creation du compte), id_contrat,id_etablissement (c'est l'ui du compte genere par firebase auth c'est pas toi qui genere sa tu vas juste recuperr l'uid de celui qui a le role etablissement),nom, produit_luxe : array =[{condition_point_luxe(calculer au tomatiquement dans @app/inscription), nom, prix,reduction_max(1/3 du prix ) }],  produit_standard : array =[{condition_point_standard(calculer au tomatiquement dans @app/inscription), nom, prix,reduction_max(1/3 du prix ) }],**montantContrat** (25000 default),updateAt **dateRenouvellement**
+- alertes : nom, multiplicateur( peut prendre les vaeurs comme (3.2, 4 ...) utiliser pour construire le message d'allerte et est calculer en determinant combien de fois la moyennne il a depasser (3x la moyenne, 3.2x la moyenne)), date, traite (pas respoID), occurence (le nombre de fois qu'il est dans le radar des alertes )
+- configuration : zones (villes, quartiers (nom, ville)), categorie_mini(bonus_trie(0),nom("Dechet de moin de 100g"),point(1)),categorie_moyen(bonus_trie
+3
+(int64)
+
+
+nom
+"sac moyen(600-2000)g"
+(string)
+
+
+
+option_poids
+(array)
+
+
+0
+600
+(int64)
+
+
+1
+1000
+(int64)
+
+
+2
+1500
+(int64)
+
+
+3
+2000
+(int64)
+
+
+
+point_correspondant
+(array)
+
+
+0
+6
+(int64)
+
+
+1
+10
+(int64)
+
+
+2
+15
+(int64)
+
+
+3
+20),categorie_petit(bonus_trie
+1
+(int64)
+
+
+nom
+"Petit sachet (100-500)g"
+(string)
+
+
+
+option_poids
+(array)
+
+
+0
+100
+(int64)
+
+
+1
+300
+(int64)
+
+
+2
+500
+(int64)
+
+
+
+point_correspondant
+(array)
+
+
+0
+1
+(int64)
+
+
+1
+3
+(int64)
+
+
+2
+5)
+-bacs (l'id des documents de cettes collections sont les uids des utilisateurs ayant pour role reponsable et qui existe dans RespoID): capacite_max(le nombre e kg maximal du bac le meme pour tout les bacs),derniere_collecte(date de la dernier collecte ( recupere la date timestamp du signalement de bac traiter genre quand hyzakam a cliquer sur traiter sa veux dire quil doit y avoir un onglet pour les signalements (bac plein) et on met a 'interieur 2 vue la vue signalement et la vue responsable qui etait dans @components/hyzakam/onglet Statistiques)),etat(sa peut etre soit disponible soit indisponible),localisation(cest la localisatio entrer par hyzakam lors de l'ajout du responsable (dont l'uid correspond a celui du documents dans lacollection bacs) dans la collectin RespoID),remplissage_actuel(je prefer que sa aille a une echelle de 1 a 100 pour presenter l'etat du bac genre si cest pres ce que plein ou pas on vas l'utiliser dans la vue signalement infraction pour que hyzakam se prepare a lavance a une evantuelle alerte concernant le bac plein et cette alerte est envoyer automatique par une cloud function lorsquelle compare le total des poids choisi par le responsale(dans l'ecran du responsable (@app/(tabs)/responsable.tsx)dans les options et qu'elle a atteint le nombre de g qu'il faux pour remplir le bac))
+- cote : nom_quartier, score_total
+- signalements : id_auteur, type (bac_plein/infraction), latitude/longitude, traite
+- partenaires : NomEntreprise, ville, statut,Id_contrat,Numero_de_telephone,date_demande,email,statut,
+-RespoID (s'il y a un autre nom dans ce message sache que je parlait de la collection RespoID javais juste fait une erreur d'orthographe et cest dans cette collection que hyzakam ajoute ces responsables lorsquil vas dans @components/hyzakam/ongletResponsable.tsx) : code_secret (code secret generer dans @components/hyzakam/ongletResponsable.tsx et utiliser dans @app/inscription.tsx pour les utilisateurs de role responsable),date_demande, email,nom,numero_de_telephone, point_depot,statut (peut etre valide en_attente, refuser), utilise (true ou false lorsue c'es true le code_secret est inutilisable bref en analysant @app/inscription.tsx tu vas comprendre  )
+
+
+**Collections manquantes** : responsables (→ query utilisateurs role='responsable' ?)
+
+**Cloud Functions prévues** (pseudo-code, expliquer junior) :
+1. **updateMontantContrat** (mensuel) :
+```js
+// Cron '0 0 1 * *' (1er jour 00h)
+exports.updateMontantContrat = functions.pubsub.schedule('0 0 1 * *').onRun(async () => {
+  const etablissements = await db.collection('etablissements').get();
+  etablissements.forEach(doc => {
+    const data = doc.data();
+    if (data.dateRenouvellement && (new Date() - data.dateRenouvellement.toDate()) > 30*24*60*60*1000) {
+      // Calcul basé cote + volume depots derniers 30j from @infoProjet
+      const nouveauMontant = calculerMontant(data.cote_moyenne, volumeDepots);
+      doc.ref.update({ montantContrat: nouveauMontant, dateRenouvellement: admin.firestore.Timestamp.now() });
+    }
+  });
+});
+```
+
+**En attente instructions commentaires code** (genererDonneesContrat, responsables, etc.)
+Last update: 2024

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BarCodeScanner } from "expo-barcode-scanner";
+import { BarCodeScanner } from 'expo-barcode-scanner';
 import {
     collection,
     getDocs,
@@ -17,8 +17,8 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { couleur, stylesTitre } from "../../../constants/animation";
-import { auth, db } from "../../../firebaseConfig";
+import { couleur, stylesTitre } from "../../constants/animation";
+import { auth, db } from "../../firebaseConfig";
 
 interface Coupon {
   id: string;

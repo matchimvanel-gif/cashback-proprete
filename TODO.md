@@ -1,12 +1,12 @@
-# TODO - Cashback Propreté: Implémentation écran Citoyen
+# TODO Nouvelle vue Responsables ongletStatistiques.tsx
 
-✅ Tous onglets créés (4/4)
-✅ app/(tabs)/citoyen.tsx implémenté avec structure complète (header, menu, tabs, onglets)
-✅ Données Firebase + cache AsyncStorage + fictives avec alertes implémentées
-✅ Test expo start lancé
+Étapes :
 
-**Tâches restantes :**
-- [ ] Résoudre erreurs TS (installer AsyncStorage types, fixer tsconfig jsx)
-- [ ] Ajouter permissions scanner dans app.json si besoin
+- [ ] 1. Ajouter vue 'responsables' nav (5ème onglet, icône 'people').
+- [ ] 2. Interface Responsable {id, nom, pointsDepot, depotsToday: number, moyenneDay: number}.
+- [ ] 3. chargerResponsables() : query collection responsables, forEach query depots today count.
+- [ ] 4. Tableau FlatList styler (glassmorphism, colonnes Nom/Points/Depos Today/Alerts, rouge >3x moyenne).
+- [ ] 5. Alertes : if depotsToday > 3\*pointsDepot/100 → createDoc 'alertes' {respoID, nom, valeur: ratio, traite:false}, sync ongletAcceuil.
+- [ ] Test realtime.
 
-**Status : PRÊT À TESTER**
+Lié ongletAcceuil.tsx alertes collection.

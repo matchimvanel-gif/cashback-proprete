@@ -3,14 +3,14 @@ import { useState } from 'react'
 import { View, Text, TouchableOpacity, ImageBackground, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { couleur } from '../../../constants/animation'
-import OngletAccueil from '../../../components/citoyen/ongletAccueil'
-import OngletCoupons from '../../../components/citoyen/ongletCoupons'
-import OngletPoints from '../../../components/citoyen/ongletPoints'
-import OngletHistorique from '../../../components/citoyen/ongletHistorique'
+import { couleur } from '../../constants/animation'
+import OngletAccueil from '../../components/citoyen/ongletAccueil'
+import OngletCoupons from '../../components/citoyen/ongletCoupons'
+import OngletPoints from '../../components/citoyen/ongletPoints'
+import OngletHistorique from '../../components/citoyen/ongletHistorique'
 import { router, useSegments } from 'expo-router'
 import { signOut } from 'firebase/auth'
-import { auth } from '../../../firebaseConfig'
+import { auth } from '../../firebaseConfig'
 
 export default function EcranCitoyen() {
   const [ongletActif, setOngletActif] = useState('accueil')
@@ -45,7 +45,7 @@ export default function EcranCitoyen() {
 
   return (
     <ImageBackground
-      source={require('../../../image/decalage-arriere-plan-abstrait-conception-coloree_677411-3431.jpg')}
+      source={require('../../image/decalage-arriere-plan-abstrait-conception-coloree_677411-3431.jpg')}
       resizeMode="cover"
       style={{ flex: 1, width: '100%', height: '100%' }}
     >

@@ -29,13 +29,9 @@ service cloud.firestore {
     // COLLECTION : utilisateurs
     // ================================================================
     match /utilisateurs/{userId} {
-
       allow read: if true;
-
       allow create: if true;
-
       allow update: if true;
-
       allow delete: if false;
     }
 
@@ -43,23 +39,18 @@ service cloud.firestore {
     // COLLECTION : invitations_hysakam
     // ================================================================
     match /invitations_hysakam/{invitationId} {
-
       allow get : if true;
-
       allow list: if false;
-
       allow create: if estHyzakam()
                     && request.resource.data.keys().hasAll(['expire_le', 'utilise', 'role'
                      ])
                     && request.resource.data.role in ['responsable', 'etablissement']
                     && request.resource.data.utilise == false;
-
       allow update: if estHyzakam()
                     && request.resource.data.diff(resource.data)
                        .affectedKeys().hasOnly(['utilise'])
                     && resource.data.utilise         == false
                     && request.resource.data.utilise == true;
-
       allow delete: if false;
     }
 
@@ -67,11 +58,9 @@ service cloud.firestore {
     // COLLECTION : depots
     // ================================================================
     match /depots/{depotId} {
-
       allow read: if (estCitoyen()     && resource.data.id_citoyen == request.auth.uid)
                   || (estResponsable() && resource.data.id_agent   == request.auth.uid)
                   || estAdmin();
-
       allow create: if estResponsable()
                     && request.resource.data.id_agent == request.auth.uid
                     && request.resource.data.keys().hasAll([
@@ -80,7 +69,6 @@ service cloud.firestore {
                      ])
                     && request.resource.data.points_gagnes >= 0
                     && request.resource.data.valeur_poids  >  0;
-
       allow update, delete: if false;
     }
 
@@ -88,19 +76,15 @@ service cloud.firestore {
     // COLLECTION : coupons
     // ================================================================
     match /coupons/{couponId} {
-
       allow read: if (estCitoyen()        && resource.data.id_citoyen == request.auth.uid)
                   || estEtablissement()
                   || estAdmin();
-
       allow create: if false;
-
       allow update: if estEtablissement()
                     && request.resource.data.diff(resource.data)
                        .affectedKeys().hasOnly(['statut'])
                     && resource.data.statut         == 'disponible'
                     && request.resource.data.statut == 'utilise';
-
       allow delete: if false;
     }
 
@@ -135,12 +119,10 @@ service cloud.firestore {
     // COLLECTION : signalements
     // ================================================================
     match /signalements/{signalementId} {
-
       allow read: if (estCitoyen()     && resource.data.id_auteur == request.auth.uid)
                   || (estResponsable() && resource.data.id_auteur == request.auth.uid)
                   || estHyzakam()
                   || (estMairie()      && resource.data.type == 'infraction');
-
       allow create: if (estCitoyen() || estResponsable())
                     && request.resource.data.id_auteur == request.auth.uid
                     && request.resource.data.keys().hasAll([
@@ -151,13 +133,11 @@ service cloud.firestore {
                     && request.resource.data.traite == false
                     && (request.resource.data.type == 'infraction'
                         || estResponsable());
-
       allow update: if estHyzakam()
                     && request.resource.data.diff(resource.data)
                        .affectedKeys().hasOnly(['traite'])
                     && resource.data.traite         == false
                     && request.resource.data.traite == true;
-
       allow delete: if false;
     }
 
@@ -166,7 +146,7 @@ service cloud.firestore {
     // ================================================================
     match /alertes/{alerteId} {
       allow read:   if estHyzakam();
-      allow create: if false;
+      allow create: if estHyzakam();
       allow update: if estHyzakam()
                     && request.resource.data.diff(resource.data)
                        .affectedKeys().hasOnly(['traite'])
@@ -184,6 +164,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ================================================================
+    // **NOUVELLE COLLECTION : responsables** (FIX PERMISSIONS)
+    // ================================================================
+    match /responsables/{respoId} {
+      allow read: if estHyzakam();
+      allow create, update: if estHyzakam();
+      allow delete: if false;
+    }
 
     // ================================================================
     // COLLECTION : RespoID
@@ -198,3 +186,4 @@ service cloud.firestore {
 
   }
 }
+

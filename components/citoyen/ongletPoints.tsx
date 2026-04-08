@@ -9,8 +9,8 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { couleur, stylesTitre } from "../../../constants/animation";
-import { auth, db } from "../../../firebaseConfig";
+import { couleur, stylesTitre } from "../../constants/animation";
+import { auth, db } from "../../firebaseConfig";
 
 interface PointHistory {
   date: string;
