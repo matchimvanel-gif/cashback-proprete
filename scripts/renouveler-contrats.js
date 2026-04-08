@@ -49,3 +49,27 @@ for (const doc of snapshot.docs) {
 }
 
 console.log('Terminé - ' + nombreMisAJour + ' contrat(s) renouvelé(s)');
+// ... le reste de ton code reste pareil ...
+
+if (differenceJours > 30) {
+
+  const nouvelleDate = new Date();
+  nouvelleDate.setDate(nouvelleDate.getDate() + 30);
+
+  try {
+    await databases.updateDocument(
+      process.env.APPWRITE_DATABASE_ID || 'cashback-proprete',   // ← change si ton Database ID est différent
+      'etablissements',
+      doc.$id,
+      {
+        montantContrat: 25000,
+        dateRenouvellement: nouvelleDate,           // ← on envoie directement le Date object
+        updatedAt: new Date()
+      }
+    );
+    nombreMisAJour++;
+    log('✅ Contrat renouvelé pour : ' + doc.$id);
+  } catch (err) {
+    error('Erreur mise à jour ' + doc.$id + ' : ' + err.message);
+  }
+}
