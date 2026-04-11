@@ -1,3 +1,1 @@
-export default function ecranResponsable(){
-    return null
-}
+import React,

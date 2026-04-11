@@ -1,11 +1,16 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    "forceConsistentCasingInFileNames": true,
     "strict": true,
+    "module": "esnext",
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     }
   },
   "include": [
@@ -13,5 +18,5 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-, "../../Apprend_fire_base/headerHyzakam.tsx"  ]
+  ]
 }

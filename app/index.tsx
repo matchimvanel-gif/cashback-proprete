@@ -3,6 +3,7 @@ import { Redirect } from 'expo-router'
 import { onAuthStateChanged } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../firebaseConfig'
+import { ROLE_ROUTES, type Role } from '../constants/roles'
 
 export default function Index() {
     const [route, setRoute] = useState<string | null>(null)
@@ -14,11 +15,10 @@ export default function Index() {
                 return
             }
             const docSnap = await getDoc(doc(db, 'utilisateurs', user.uid))
-            const role = docSnap.data()?.role
-            if (role === 'citoyen')       setRoute('/(tabs)/citoyen')
-            if (role === 'responsable')   setRoute('/(tabs)/responsable')
-            if (role === 'etablissement') setRoute('/(tabs)/etablissement')
-            if (role === 'hyzakam')       setRoute('/(tabs)/hyzakam')
+            const role = docSnap.data()?.role as Role | undefined
+            if (role && role in ROLE_ROUTES) {
+                setRoute(ROLE_ROUTES[role])
+            }
         })
     }, [])
 
