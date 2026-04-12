@@ -1,0 +1,42 @@
+name: Deploy Cloud Functions + Renouveler Contrats
+
+on:
+  schedule:
+    - cron: '0 0 * * *'       # Renouvellement contrats : tous les jours à minuit
+    - cron: '0 */1 * * *'     # Analyse responsables suspects : toutes les heures
+  push:
+    branches:
+      - essaie2
+    paths:
+      - 'functions/cashback-functions/**'        # Redéploie uniquement si functions/ a changé
+  workflow_dispatch:           # Lancement manuel depuis GitHub
+
+jobs:
+
+  # JOB 2 — Renouveler les contrats établissements
+  # ─────────────────────────────────────────────────────
+  renouveler-contrats:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Installer les dépendances scripts
+        run: |
+          cd scripts
+          npm install
+
+      - name: Lancer le renouvellement des contrats
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+        run: |
+          cd scripts
+          node renouveler-contrats.js
