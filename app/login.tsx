@@ -5,6 +5,7 @@ import { signInWithEmailAndPassword, sendPasswordResetEmail} from 'firebase/auth
 import { doc, getDoc } from 'firebase/firestore'
 import { auth, db } from '../firebaseConfig'
 import { couleur, utiliserAnimationEntree } from '../constants/animation'
+import { ROLE_ROUTES, type Role } from '../constants/roles'
 
 
 export default function ecranLogin(){
@@ -43,11 +44,8 @@ export default function ecranLogin(){
             const resultat = await signInWithEmailAndPassword(auth, email, password) //renvoie les informations de l'utilisateur dans resultat
             const uid = resultat.user.uid // recupere l'uid de l'utilisateur dans resultat
             const docSnap = await getDoc(doc(db, 'utilisateurs', uid))// utilise l'iud de l'utilisateur pour recuperer la fiche qui contient toute ses informations et actions mener dans l'application pour le stocker dans docSnap
-            const role = docSnap.data()!.role
-            if (role === 'citoyen'){       router.replace('/(tabs)/citoyen')}
-            if (role === 'responsable'){   router.replace('/(tabs)/responsable')}
-            if (role === 'etablissement') {router.replace('/(tabs)/etablissement')}
-            if (role === 'hyzakam')       router.replace('/(tabs)/hyzakam')
+            const role = docSnap.data()!.role as Role
+            router.replace(ROLE_ROUTES[role])
         } catch (e: any) { // e contient le detail de l'erreur 
             if (e.code === 'auth/invalid-credential') afficherErreurTemporaire('Email ou mot de passe incorrect.')
             if (e.code === 'auth/too-many-requests')  afficherErreurTemporaire('Trop de tentatives. Réessaie plus tard.')
@@ -275,4 +273,3 @@ export default function ecranLogin(){
             </ImageBackground>
     );
 }
-

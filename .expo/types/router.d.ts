@@ -1,14 +1,220 @@
 /* eslint-disable */
-import * as Router from 'expo-router';
+import * as Router from "expo-router";
 
-export * from 'expo-router';
+export * from "expo-router";
 
-declare module 'expo-router' {
+declare module "expo-router" {
   export namespace ExpoRouter {
     export interface __routes<T extends string | object = string> {
-      hrefInputParams: { pathname: Router.RelativePathString, params?: Router.UnknownInputParams } | { pathname: Router.ExternalPathString, params?: Router.UnknownInputParams } | { pathname: `/`; params?: Router.UnknownInputParams; } | { pathname: `/inscription`; params?: Router.UnknownInputParams; } | { pathname: `/login`; params?: Router.UnknownInputParams; } | { pathname: `/modal`; params?: Router.UnknownInputParams; } | { pathname: `/../components/hyzakam/ongletGains`; params?: Router.UnknownInputParams; } | { pathname: `/_sitemap`; params?: Router.UnknownInputParams; } | { pathname: `${'/(tabs)'}/citoyen` | `/citoyen`; params?: Router.UnknownInputParams; } | { pathname: `${'/(tabs)'}/etablissement` | `/etablissement`; params?: Router.UnknownInputParams; } | { pathname: `${'/(tabs)'}/hyzakam` | `/hyzakam`; params?: Router.UnknownInputParams; } | { pathname: `${'/(tabs)'}/responsable` | `/responsable`; params?: Router.UnknownInputParams; };
-      hrefOutputParams: { pathname: Router.RelativePathString, params?: Router.UnknownOutputParams } | { pathname: Router.ExternalPathString, params?: Router.UnknownOutputParams } | { pathname: `/`; params?: Router.UnknownOutputParams; } | { pathname: `/inscription`; params?: Router.UnknownOutputParams; } | { pathname: `/login`; params?: Router.UnknownOutputParams; } | { pathname: `/modal`; params?: Router.UnknownOutputParams; } | { pathname: `/../components/hyzakam/ongletGains`; params?: Router.UnknownOutputParams; } | { pathname: `/_sitemap`; params?: Router.UnknownOutputParams; } | { pathname: `${'/(tabs)'}/citoyen` | `/citoyen`; params?: Router.UnknownOutputParams; } | { pathname: `${'/(tabs)'}/etablissement` | `/etablissement`; params?: Router.UnknownOutputParams; } | { pathname: `${'/(tabs)'}/hyzakam` | `/hyzakam`; params?: Router.UnknownOutputParams; } | { pathname: `${'/(tabs)'}/responsable` | `/responsable`; params?: Router.UnknownOutputParams; };
-      href: Router.RelativePathString | Router.ExternalPathString | `/${`?${string}` | `#${string}` | ''}` | `/inscription${`?${string}` | `#${string}` | ''}` | `/login${`?${string}` | `#${string}` | ''}` | `/modal${`?${string}` | `#${string}` | ''}` | `/../components/hyzakam/ongletGains${`?${string}` | `#${string}` | ''}` | `/_sitemap${`?${string}` | `#${string}` | ''}` | `${'/(tabs)'}/citoyen${`?${string}` | `#${string}` | ''}` | `/citoyen${`?${string}` | `#${string}` | ''}` | `${'/(tabs)'}/etablissement${`?${string}` | `#${string}` | ''}` | `/etablissement${`?${string}` | `#${string}` | ''}` | `${'/(tabs)'}/hyzakam${`?${string}` | `#${string}` | ''}` | `/hyzakam${`?${string}` | `#${string}` | ''}` | `${'/(tabs)'}/responsable${`?${string}` | `#${string}` | ''}` | `/responsable${`?${string}` | `#${string}` | ''}` | { pathname: Router.RelativePathString, params?: Router.UnknownInputParams } | { pathname: Router.ExternalPathString, params?: Router.UnknownInputParams } | { pathname: `/`; params?: Router.UnknownInputParams; } | { pathname: `/inscription`; params?: Router.UnknownInputParams; } | { pathname: `/login`; params?: Router.UnknownInputParams; } | { pathname: `/modal`; params?: Router.UnknownInputParams; } | { pathname: `/../components/hyzakam/ongletGains`; params?: Router.UnknownInputParams; } | { pathname: `/_sitemap`; params?: Router.UnknownInputParams; } | { pathname: `${'/(tabs)'}/citoyen` | `/citoyen`; params?: Router.UnknownInputParams; } | { pathname: `${'/(tabs)'}/etablissement` | `/etablissement`; params?: Router.UnknownInputParams; } | { pathname: `${'/(tabs)'}/hyzakam` | `/hyzakam`; params?: Router.UnknownInputParams; } | { pathname: `${'/(tabs)'}/responsable` | `/responsable`; params?: Router.UnknownInputParams; };
+      hrefInputParams:
+        | {
+            pathname: Router.RelativePathString;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: Router.ExternalPathString;
+            params?: Router.UnknownInputParams;
+          }
+        | { pathname: `/inscription`; params?: Router.UnknownInputParams }
+        | { pathname: `/modal`; params?: Router.UnknownInputParams }
+        | {
+            pathname: `${"/(tabs)"}/citoyen` | `/citoyen`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `${"/(tabs)"}/hyzakam` | `/hyzakam`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `${"/(tabs)"}/responsable` | `/responsable`;
+            params?: Router.UnknownInputParams;
+          }
+        | { pathname: `/`; params?: Router.UnknownInputParams }
+        | { pathname: `/login`; params?: Router.UnknownInputParams }
+        | {
+            pathname: `/../components/citoyen/ongletAccueil`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../components/citoyen/ongletCoupons`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../components/citoyen/ongletHistorique`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../components/citoyen/ongletPoints`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../components/hyzakam/ongletAcceuil`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../components/hyzakam/ongletStatistiques`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../constants/animation`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../constants/roles`;
+            params?: Router.UnknownInputParams;
+          }
+        | { pathname: `/_sitemap`; params?: Router.UnknownInputParams }
+        | {
+            pathname: `${"/(tabs)"}/etablissement` | `/etablissement`;
+            params?: Router.UnknownInputParams;
+          };
+      hrefOutputParams:
+        | {
+            pathname: Router.RelativePathString;
+            params?: Router.UnknownOutputParams;
+          }
+        | {
+            pathname: Router.ExternalPathString;
+            params?: Router.UnknownOutputParams;
+          }
+        | { pathname: `/inscription`; params?: Router.UnknownOutputParams }
+        | { pathname: `/modal`; params?: Router.UnknownOutputParams }
+        | {
+            pathname: `${"/(tabs)"}/citoyen` | `/citoyen`;
+            params?: Router.UnknownOutputParams;
+          }
+        | {
+            pathname: `${"/(tabs)"}/hyzakam` | `/hyzakam`;
+            params?: Router.UnknownOutputParams;
+          }
+        | {
+            pathname: `${"/(tabs)"}/responsable` | `/responsable`;
+            params?: Router.UnknownOutputParams;
+          }
+        | { pathname: `/`; params?: Router.UnknownOutputParams }
+        | { pathname: `/login`; params?: Router.UnknownOutputParams }
+        | {
+            pathname: `/../components/citoyen/ongletAccueil`;
+            params?: Router.UnknownOutputParams;
+          }
+        | {
+            pathname: `/../components/citoyen/ongletCoupons`;
+            params?: Router.UnknownOutputParams;
+          }
+        | {
+            pathname: `/../components/citoyen/ongletHistorique`;
+            params?: Router.UnknownOutputParams;
+          }
+        | {
+            pathname: `/../components/citoyen/ongletPoints`;
+            params?: Router.UnknownOutputParams;
+          }
+        | {
+            pathname: `/../components/hyzakam/ongletAcceuil`;
+            params?: Router.UnknownOutputParams;
+          }
+        | {
+            pathname: `/../components/hyzakam/ongletStatistiques`;
+            params?: Router.UnknownOutputParams;
+          }
+        | {
+            pathname: `/../constants/animation`;
+            params?: Router.UnknownOutputParams;
+          }
+        | {
+            pathname: `/../constants/roles`;
+            params?: Router.UnknownOutputParams;
+          }
+        | { pathname: `/_sitemap`; params?: Router.UnknownOutputParams }
+        | {
+            pathname: `${"/(tabs)"}/etablissement` | `/etablissement`;
+            params?: Router.UnknownOutputParams;
+          };
+      href:
+        | Router.RelativePathString
+        | Router.ExternalPathString
+        | `/inscription${`?${string}` | `#${string}` | ""}`
+        | `/modal${`?${string}` | `#${string}` | ""}`
+        | `${"/(tabs)"}/citoyen${`?${string}` | `#${string}` | ""}`
+        | `/citoyen${`?${string}` | `#${string}` | ""}`
+        | `${"/(tabs)"}/hyzakam${`?${string}` | `#${string}` | ""}`
+        | `/hyzakam${`?${string}` | `#${string}` | ""}`
+        | `${"/(tabs)"}/responsable${`?${string}` | `#${string}` | ""}`
+        | `/responsable${`?${string}` | `#${string}` | ""}`
+        | `/${`?${string}` | `#${string}` | ""}`
+        | `/login${`?${string}` | `#${string}` | ""}`
+        | `/../components/citoyen/ongletAccueil${`?${string}` | `#${string}` | ""}`
+        | `/../components/citoyen/ongletCoupons${`?${string}` | `#${string}` | ""}`
+        | `/../components/citoyen/ongletHistorique${`?${string}` | `#${string}` | ""}`
+        | `/../components/citoyen/ongletPoints${`?${string}` | `#${string}` | ""}`
+        | `/../components/hyzakam/ongletAcceuil${`?${string}` | `#${string}` | ""}`
+        | `/../components/hyzakam/ongletStatistiques${`?${string}` | `#${string}` | ""}`
+        | `/../constants/animation${`?${string}` | `#${string}` | ""}`
+        | `/../constants/roles${`?${string}` | `#${string}` | ""}`
+        | `/_sitemap${`?${string}` | `#${string}` | ""}`
+        | `${"/(tabs)"}/etablissement${`?${string}` | `#${string}` | ""}`
+        | `/etablissement${`?${string}` | `#${string}` | ""}`
+        | {
+            pathname: Router.RelativePathString;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: Router.ExternalPathString;
+            params?: Router.UnknownInputParams;
+          }
+        | { pathname: `/inscription`; params?: Router.UnknownInputParams }
+        | { pathname: `/modal`; params?: Router.UnknownInputParams }
+        | {
+            pathname: `${"/(tabs)"}/citoyen` | `/citoyen`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `${"/(tabs)"}/hyzakam` | `/hyzakam`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `${"/(tabs)"}/responsable` | `/responsable`;
+            params?: Router.UnknownInputParams;
+          }
+        | { pathname: `/`; params?: Router.UnknownInputParams }
+        | { pathname: `/login`; params?: Router.UnknownInputParams }
+        | {
+            pathname: `/../components/citoyen/ongletAccueil`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../components/citoyen/ongletCoupons`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../components/citoyen/ongletHistorique`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../components/citoyen/ongletPoints`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../components/hyzakam/ongletAcceuil`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../components/hyzakam/ongletStatistiques`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../constants/animation`;
+            params?: Router.UnknownInputParams;
+          }
+        | {
+            pathname: `/../constants/roles`;
+            params?: Router.UnknownInputParams;
+          }
+        | { pathname: `/_sitemap`; params?: Router.UnknownInputParams }
+        | {
+            pathname: `${"/(tabs)"}/etablissement` | `/etablissement`;
+            params?: Router.UnknownInputParams;
+          };
     }
   }
 }

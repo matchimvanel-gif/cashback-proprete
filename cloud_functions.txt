@@ -1,0 +1,8 @@
+Cloud Functions du projet (functions/src/) :
+
+- dataconnect-admin-generated/ : Auto-generated Firebase DataConnect (queries/mutations admin).
+- ni/ : Fonctionnalités spécifiques NI (non implémentées ?).
+- index.js : Entry point principal.
+
+Fonctionnement : Déclenchées par Firestore events ou HTTPS, gèrent cashback propreté (dépôts, points, coupons).
+

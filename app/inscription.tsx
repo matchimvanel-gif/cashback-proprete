@@ -5,6 +5,7 @@ import { createUserWithEmailAndPassword} from 'firebase/auth'
 import { doc, getDoc,setDoc,collection,query,where,getDocs,updateDoc,Timestamp} from 'firebase/firestore'
 import { auth, db } from '../firebaseConfig'
 import { couleur, utiliserAnimationEntree} from "../constants/animation"
+import { INSCRIPTION_ROLES, ROLE_LABELS, ROLE_ROUTES, ROLES, type Role } from '../constants/roles'
 
 const SEUIL_MINIMAL = 25000
 
@@ -15,7 +16,7 @@ export default function ecranRegister(){
     const [chargement,setCharge]=useState(false);
     const [isFocus,setIsFocus]=useState(false); // email
     const [isFocused,setIsFocused]=useState(false);//password
-    const [role,setRole]=useState('citoyen');
+    const [role,setRole]=useState<Role>(ROLES.citoyen);
     const [menuOuvert,setMenuOuvert]=useState(false);
     const [nomResponsable, setNomResponsable] = useState('');
     const [isFocusNomRespo, setIsFocusNomRespo] = useState(false);
@@ -296,17 +297,6 @@ export default function ecranRegister(){
                     updateAt:maintenant,
                 })
             }
-            // Après la création de l'établissement
-            const vercelUrl = "https://cashback-proprete-pjiz0pwuj-matchimvanel-gifs-projects.vercel.app/api/update-montant-contrat";
-
-            fetch(vercelUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
-            })
-            .then(res => res.json())
-            .then(data => console.log("Renouvellement vérifié :", data))
-            .catch(err => console.log("Erreur renouvellement :", err));
             // ÉTAPE 4 — Marquer le code comme utilisé
             if (role === 'responsable') {
                 const codeAVerifier =codeResponsable
@@ -319,9 +309,7 @@ export default function ecranRegister(){
             }
 
             // ÉTAPE 5 — Rediriger selon le rôle
-            if (role === 'citoyen')       router.replace('/(tabs)/citoyen')
-            if (role === 'responsable')   router.replace('/(tabs)/responsable')
-            if (role === 'etablissement') router.replace('/(tabs)/etablissement')
+            router.replace(ROLE_ROUTES[role])
 
         } catch (e: any) {
             // Si l'écriture échoue, on nettoie le compte Auth créé juste avant
@@ -1161,9 +1149,7 @@ export default function ecranRegister(){
                             onPress={() => setMenuOuvert(!menuOuvert)}
                         >
                             <Text style={{ color: '#fff' }}>
-                                {role === 'citoyen' ? 'Citoyen' : 
-                                role === 'responsable' ? 'Responsable Propreté' : 
-                                'Établissement / Partenaire'}
+                                {ROLE_LABELS[role]}
                             </Text>
                             <Text style={{ color: couleur.dore }}>{menuOuvert ? '▲' : '▼'}</Text>
                         </TouchableOpacity>
@@ -1176,7 +1162,7 @@ export default function ecranRegister(){
                                 marginBottom: 20,
                                 padding: 10 
                             }}>
-                                {['citoyen', 'responsable', 'etablissement'].map((item) => ( //cree un bouton cliquable de mm style pour chaque items (citoyen,responsable,etablissement) et items est un nom choisi aux hasard elle est emporaire et est asocier au valeurs du tableaux
+                                {INSCRIPTION_ROLES.map((item) => ( //cree un bouton cliquable de mm style pour chaque items (citoyen,responsable,etablissement) et items est un nom choisi aux hasard elle est emporaire et est asocier au valeurs du tableaux
                                     <TouchableOpacity 
                                         key={item}
                                         style={{ padding: 12, borderBottomWidth: item === 'etablissement' ? 0 : 0.5, borderBottomColor: 'rgba(255,255,255,0.2)' }}
@@ -1186,7 +1172,7 @@ export default function ecranRegister(){
                                         }}
                                     >
                                         <Text style={{ color: role === item ? couleur.doreClair : couleur.blanc, fontWeight: role === item ? 'bold' : 'normal' }}>
-                                            {item.charAt(0).toUpperCase() + item.slice(1)}
+                                            {ROLE_LABELS[item]}
                                             {/*charAt(0) prend le 1er caractere du mot
                                                 toUpperCase() met en majuscule le caractere pris par chartArt
                                                 +item.slice(1) concatene le restedu mot a la majuscule */}

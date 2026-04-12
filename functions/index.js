@@ -1,83 +1,331 @@
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+const db = admin.firestore();
+
+// Limite simple pour éviter trop d'instances
+functions.setGlobalOptions({maxInstances: 10});
+
 /**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ * Petit helper pour convertir une date Firestore/JS en Date JS.
  */
+function convertirEnDate(valeur) {
+  if (!valeur) {
+    return null;
+  }
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
-const logger = require("firebase-functions/logger");
+  if (valeur instanceof Date) {
+    return valeur;
+  }
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+  if (typeof valeur.toDate === "function") {
+    return valeur.toDate();
+  }
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+  const date = new Date(valeur);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-    import * as functions from "firebase-functions";
-    import * as admin from "firebase-admin";
+  return date;
+}
 
-    admin.initializeApp();
+/**
+ * Retourne la clé YYYY-MM-DD pour regrouper par jour.
+ */
+function cleJour(date) {
+  const annee = date.getFullYear();
+  const mois = String(date.getMonth() + 1).padStart(2, "0");
+  const jour = String(date.getDate()).padStart(2, "0");
+  return `${annee}-${mois}-${jour}`;
+}
 
-    export const addMontantToExistingEtablissements = functions.https.onCall(async (data, context) => {
-        
-        // Sécurité : Seul l'admin Hyzakam peut exécuter cette fonction
-        if (!context.auth || context.auth.uid !== "cJdPoZIqE8a6hnSmPNO348TB2hI2") {  
-            throw new functions.https.HttpsError("permission-denied", "Accès réservé à l'admin");
-        }
+/**
+ * Compte les dépôts par responsable sur une période donnée.
+ * Le projet peut utiliser id_agent, responsableId ou respoID selon les données.
+ */
+async function compterDepotsParResponsable(dateDebut, dateFin) {
+  const snapshot = await db
+    .collection("depots")
+    .where("date", ">=", admin.firestore.Timestamp.fromDate(dateDebut))
+    .where("date", "<=", admin.firestore.Timestamp.fromDate(dateFin))
+    .get();
 
-        const etablissementsRef = admin.firestore().collection("etablissements");
-        const snapshot = await etablissementsRef.get();
+  const comptes = {};
 
-        if (snapshot.empty) {
-            return { success: true, message: "Aucun établissement trouvé" };
-        }
+  snapshot.forEach((document) => {
+    const depot = document.data();
+    const responsableId =
+      depot.id_agent || depot.responsableId || depot.respoID || null;
 
-        const maintenant = admin.firestore.Timestamp.now();
-        let updatedCount = 0;
+    if (!responsableId) {
+      return;
+    }
 
-        const batch = admin.firestore().batch();
+    if (!comptes[responsableId]) {
+      comptes[responsableId] = 0;
+    }
 
-        snapshot.docs.forEach((doc) => {
-            const data = doc.data();
+    comptes[responsableId] += 1;
+  });
 
-            // Si le document n'a pas encore les nouveaux champs
-            if (data.montantContrat === undefined || data.dateRenouvellement === undefined) {
-                
-                batch.update(doc.ref, {
-                    montantContrat: 25000,                    // Valeur initiale
-                    dateRenouvellement: maintenant,           // Date du jour
-                    createdAt: data.createdAt || maintenant,  // Garde l'ancien createdAt s'il existe
-                    updatedAt: maintenant,                    // Met à jour la date de modification
-                });
-                
-                updatedCount++;
-            }
+  return comptes;
+}
+
+/**
+ * Calcule une moyenne journalière simple sur les 7 jours précédents.
+ * On ignore aujourd'hui pour comparer le volume du jour à l'habitude récente.
+ */
+async function calculerMoyenneGlissanteResponsable(responsableId, debutAujourdHui) {
+  const debutHistorique = new Date(debutAujourdHui);
+  debutHistorique.setDate(debutHistorique.getDate() - 7);
+
+  const finHistorique = new Date(debutAujourdHui);
+  finHistorique.setMilliseconds(finHistorique.getMilliseconds() - 1);
+
+  const snapshot = await db
+    .collection("depots")
+    .where("date", ">=", admin.firestore.Timestamp.fromDate(debutHistorique))
+    .where("date", "<=", admin.firestore.Timestamp.fromDate(finHistorique))
+    .get();
+
+  const compteParJour = {};
+
+  snapshot.forEach((document) => {
+    const depot = document.data();
+    const idTrouve =
+      depot.id_agent || depot.responsableId || depot.respoID || null;
+
+    if (idTrouve !== responsableId) {
+      return;
+    }
+
+    const dateDepot = convertirEnDate(depot.date);
+    if (!dateDepot) {
+      return;
+    }
+
+    const jour = cleJour(dateDepot);
+    if (!compteParJour[jour]) {
+      compteParJour[jour] = 0;
+    }
+
+    compteParJour[jour] += 1;
+  });
+
+  let total = 0;
+  const jours = Object.keys(compteParJour);
+
+  jours.forEach((jour) => {
+    total += compteParJour[jour];
+  });
+
+  return {
+    moyenne: jours.length > 0 ? total / jours.length : 0,
+    nbJoursAvecActivite: jours.length,
+  };
+}
+
+/**
+ * Essaie de retrouver le nom du responsable dans la collection utilisateurs.
+ */
+async function recupererNomResponsable(responsableId) {
+  try {
+    const utilisateur = await db.collection("utilisateurs").doc(responsableId).get();
+
+    if (!utilisateur.exists) {
+      return "Responsable inconnu";
+    }
+
+    const data = utilisateur.data() || {};
+    return data.nom || data.name || "Responsable inconnu";
+  } catch (error) {
+    console.error("Erreur lecture utilisateur:", error);
+    return "Responsable inconnu";
+  }
+}
+
+/**
+ * Crée ou met à jour une alerte du jour pour un responsable suspect.
+ * Le document est stable par responsable + jour pour éviter les doublons.
+ */
+async function creerOuMettreAJourAlerte({
+  responsableId,
+  nom,
+  multiplicateur,
+  occurence,
+  depotsAujourdHui,
+  moyenneHabituelle,
+}) {
+  const aujourdHui = new Date();
+  const jour = cleJour(aujourdHui);
+  const alerteId = `${responsableId}_${jour}`;
+
+  const donneesAlerte = {
+    nom,
+    responsableId,
+    multiplicateur,
+    occurence,
+    date: admin.firestore.Timestamp.fromDate(aujourdHui),
+    traite: false,
+    depotsAujourdHui,
+    moyenneHabituelle,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  await db.collection("alertes").doc(alerteId).set(donneesAlerte, {merge: true});
+}
+
+/**
+ * Analyse simple des dépôts du jour.
+ * Un responsable est considéré suspect si :
+ * - il a au moins 5 dépôts aujourd'hui
+ * - il a un historique minimal sur au moins 2 jours
+ * - et son volume du jour est >= 2x sa moyenne récente
+ */
+async function analyserResponsablesSuspects() {
+  const maintenant = new Date();
+  const debutAujourdHui = new Date(maintenant);
+  debutAujourdHui.setHours(0, 0, 0, 0);
+
+  const finAujourdHui = new Date(maintenant);
+  finAujourdHui.setHours(23, 59, 59, 999);
+
+  const comptesDuJour = await compterDepotsParResponsable(
+    debutAujourdHui,
+    finAujourdHui
+  );
+
+  const responsables = Object.keys(comptesDuJour);
+  let nombreAlertes = 0;
+
+  for (const responsableId of responsables) {
+    const depotsAujourdHui = comptesDuJour[responsableId];
+
+    if (depotsAujourdHui < 5) {
+      continue;
+    }
+
+    const historique = await calculerMoyenneGlissanteResponsable(
+      responsableId,
+      debutAujourdHui
+    );
+
+    if (historique.nbJoursAvecActivite < 2 || historique.moyenne <= 0) {
+      continue;
+    }
+
+    const multiplicateurBrut = depotsAujourdHui / historique.moyenne;
+    const multiplicateur = Number(multiplicateurBrut.toFixed(2));
+
+    if (multiplicateur < 2) {
+      continue;
+    }
+
+    const nom = await recupererNomResponsable(responsableId);
+
+    await creerOuMettreAJourAlerte({
+      responsableId,
+      nom,
+      multiplicateur,
+      occurence: depotsAujourdHui,
+      depotsAujourdHui,
+      moyenneHabituelle: Number(historique.moyenne.toFixed(2)),
+    });
+
+    nombreAlertes += 1;
+  }
+
+  return {
+    success: true,
+    analysedResponsables: responsables.length,
+    alertesCreeesOuMisesAJour: nombreAlertes,
+  };
+}
+
+/**
+ * Fonction callable existante, gardée en JavaScript CommonJS valide.
+ * Sert à compléter les anciens établissements.
+ */
+exports.addMontantToExistingEtablissements = functions.https.onCall(
+  async (data, context) => {
+    if (!context.auth || context.auth.uid !== "cJdPoZIqE8a6hnSmPNO348TB2hI2") {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Accès réservé à l'admin"
+      );
+    }
+
+    const etablissementsRef = db.collection("etablissements");
+    const snapshot = await etablissementsRef.get();
+
+    if (snapshot.empty) {
+      return {success: true, message: "Aucun établissement trouvé"};
+    }
+
+    const maintenant = admin.firestore.Timestamp.now();
+    let updatedCount = 0;
+
+    const batch = db.batch();
+
+    snapshot.docs.forEach((document) => {
+      const dataEtablissement = document.data();
+
+      if (
+        dataEtablissement.montantContrat === undefined ||
+        dataEtablissement.dateRenouvellement === undefined
+      ) {
+        batch.update(document.ref, {
+          montantContrat: 25000,
+          dateRenouvellement: maintenant,
+          createdAt: dataEtablissement.createdAt || maintenant,
+          updatedAt: maintenant,
         });
 
-        await batch.commit();
-
-        console.log(`${updatedCount} établissements mis à jour avec succès.`);
-
-        return {
-            success: true,
-            message: `${updatedCount} établissements ont été mis à jour avec montantContrat = 25000 et dateRenouvellement.`,
-            updatedCount
-        };
+        updatedCount += 1;
+      }
     });
-// });
+
+    await batch.commit();
+
+    return {
+      success: true,
+      message:
+        `${updatedCount} établissements ont été mis à jour avec montantContrat = 25000 et dateRenouvellement.`,
+      updatedCount,
+    };
+  }
+);
+
+/**
+ * Callable simple pour lancer l'analyse manuellement depuis l'admin si besoin.
+ */
+exports.detecterResponsablesSuspects = functions.https.onCall(
+  async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Connexion requise"
+      );
+    }
+
+    return analyserResponsablesSuspects();
+  }
+);
+
+/**
+ * Scheduler automatique.
+ * Lance une vérification régulière des dépôts du jour.
+ */
+exports.verifierAlertesResponsables = functions.pubsub
+  .schedule("every 60 minutes")
+  .timeZone("Africa/Douala")
+  .onRun(async () => {
+    const resultat = await analyserResponsablesSuspects();
+    console.log("Analyse alertes responsables:", resultat);
+    return null;
+  });
