@@ -11,7 +11,7 @@ export const couleur = {
     erreur: '#5e2923',
     erreurClair:'#9a432b',
     vert:'#2d6a4f',
-    grey:'#4741418c'
+grey:'rgba(71,65,65,0.55)'
 }
 
 export const stylesTitre= StyleSheet.create({

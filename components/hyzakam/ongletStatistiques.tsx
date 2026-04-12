@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   where,
@@ -30,6 +31,7 @@ import { db } from "../../firebaseConfig";
 
 const { width } = Dimensions.get("window");
 
+// ─── Types des vues disponibles dans les onglets internes ───────────────────
 type VueStatistique =
   | "depots"
   | "semaines"
@@ -37,8 +39,10 @@ type VueStatistique =
   | "gains"
   | "responsables";
 
+// ─── Type pour les données des graphiques Victory ───────────────────────────
 type DonneeGraphique = { x: string; y: number };
 
+// ─── Type d'un établissement partenaire lu depuis Firestore ─────────────────
 type Etablissement = {
   id: string;
   nom: string;
@@ -47,6 +51,7 @@ type Etablissement = {
   dateRenouvellement?: Date | null;
 };
 
+// ─── Type d'un responsable de collecte lu depuis Firestore ──────────────────
 type Responsable = {
   id: string;
   nom: string;
@@ -57,15 +62,19 @@ type Responsable = {
   alerteLocale: boolean;
 };
 
+// ─── Type d'un quartier lu depuis la configuration ──────────────────────────
 type Quartier = {
   nom: string;
   ville: string;
 };
 
+// Seuil minimal de contrat en FCFA
 const SEUIL_MINIMAL = 25000;
 
+// Données vides pour les graphiques pendant le chargement
 const donneesDepotsVides: DonneeGraphique[] = [
-  { x: "7h-10h", y: 0 },
+  {x:  ""      ,  y: 0 },
+  { x: "7h-10h",  y: 0 },
   { x: "10h-13h", y: 0 },
   { x: "13h-16h", y: 0 },
   { x: "16h-19h", y: 0 },
@@ -73,6 +82,7 @@ const donneesDepotsVides: DonneeGraphique[] = [
 ];
 
 const donneesSemainesVides: DonneeGraphique[] = [
+  {x:"",y:0},
   { x: "Sem 1", y: 0 },
   { x: "Sem 2", y: 0 },
   { x: "Sem 3", y: 0 },
@@ -94,10 +104,12 @@ const moisLibelles = [
   "Déc",
 ];
 
+// ─── Formate un nombre en montant FCFA lisible ───────────────────────────────
 function formaterMontant(montant: number): string {
   return montant.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " FCFA";
 }
 
+// ─── Convertit n'importe quelle valeur date en objet Date ───────────────────
 function convertirEnDate(valeur: any): Date | null {
   if (!valeur) return null;
 
@@ -113,6 +125,7 @@ function convertirEnDate(valeur: any): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+// ─── Lit un nombre depuis plusieurs champs possibles (tolérance de schéma) ──
 function lireNombre(...valeurs: any[]): number {
   for (const valeur of valeurs) {
     if (typeof valeur === "number" && Number.isFinite(valeur)) {
@@ -128,139 +141,209 @@ function lireNombre(...valeurs: any[]): number {
   return 0;
 }
 
+// ─── Formate une date en format court français ──────────────────────────────
 function formaterDateCourte(date?: Date | null): string {
   if (!date) return "Non définie";
   return date.toLocaleDateString("fr-FR");
 }
 
+// ─── COMPOSANT PRINCIPAL ────────────────────────────────────────────────────
 export default function OngletStatistiques() {
+  // Onglet actif parmi les 5 vues disponibles
   const [vueActive, setVueActive] = useState<VueStatistique>("depots");
   const [chargement, setChargement] = useState(true);
 
+  // Données pour l'onglet Dépôts
   const [donneesDepots, setDonneesDepots] =
     useState<DonneeGraphique[]>(donneesDepotsVides);
   const [totalDepots, setTotalDepots] = useState(0);
 
+  // Données pour l'onglet Semaines
   const [donneesSemaines, setDonneesSemaines] =
     useState<DonneeGraphique[]>(donneesSemainesVides);
 
+  // Données pour l'onglet Contrats
   const [etablissements, setEtablissements] = useState<Etablissement[]>([]);
   const [partenaireOuvert, setPartenaireOuvert] = useState<string | null>(null);
   const [donneesContrats, setDonneesContrats] = useState<{
     [key: string]: DonneeGraphique[];
   }>({});
 
+  // Données pour l'onglet Responsables
   const [responsables, setResponsables] = useState<Responsable[]>([]);
 
+  // Données de configuration (villes et quartiers)
   const [villes, setVilles] = useState<string[]>([]);
   const [quartiers, setQuartiers] = useState<Quartier[]>([]);
   const [villeSelectionnee, setVilleSelectionnee] = useState("Bafoussam");
   const [menuVilleOuvert, setMenuVilleOuvert] = useState(false);
 
+  // ─── CORRECTION 1 : onSnapshot en temps réel pour les établissements ──────
+  // L'original utilisait getDocs (lecture unique).
+  // On remplace par onSnapshot pour que les données se mettent à jour
+  // automatiquement quand Hyzakam valide un nouveau partenaire.
   useEffect(function () {
+    // Listener temps réel sur la collection etablissements
+    const desabonnerEtablissements = onSnapshot(
+      collection(db, "etablissements"),
+      function (snapshot) {
+        const liste: Etablissement[] = [];
+        const donneesMap: { [key: string]: DonneeGraphique[] } = {};
+
+        snapshot.docs.forEach(function (documentEtablissement) {
+          const data = documentEtablissement.data();
+          const montantContrat = lireNombre(data.montantContrat, 25000);
+          const dateRenouvellement = convertirEnDate(data.dateRenouvellement);
+
+          const etablissement: Etablissement = {
+            id: documentEtablissement.id,
+            nom: data.nom || data.NomEntreprise || "Établissement",
+            ville: data.ville || "",
+            montantContrat,
+            dateRenouvellement,
+          };
+
+          liste.push(etablissement);
+
+          donneesMap[documentEtablissement.id] = [
+            {
+              x: dateRenouvellement
+                ? moisLibelles[dateRenouvellement.getMonth()]
+                : "Actuel",
+              y: montantContrat,
+            },
+          ];
+        });
+
+        setEtablissements(liste);
+        setDonneesContrats(donneesMap);
+      },
+      function (erreur) {
+        console.error("Erreur écoute établissements:", erreur);
+        setEtablissements([]);
+        setDonneesContrats({});
+      }
+    );
+
+    // Nettoyage du listener quand le composant est démonté
+    return function () {
+      desabonnerEtablissements();
+    };
+  }, []);
+
+  // ─── CORRECTION 2 : onSnapshot en temps réel pour les responsables ────────
+  // L'original utilisait getDocs. On utilise onSnapshot pour voir les
+  // nouveaux responsables ajoutés par Hyzakam sans recharger l'écran.
+  useEffect(function () {
+    const desabonnerRespo = onSnapshot(
+      collection(db, "RespoID"),
+      async function (snapshotRespo) {
+        const listeRespo: Responsable[] = [];
+
+        const debutJour = new Date();
+        debutJour.setHours(0, 0, 0, 0);
+
+        const finJour = new Date();
+        finJour.setHours(23, 59, 59, 999);
+
+        for (const documentRespo of snapshotRespo.docs) {
+          const dataRespo = documentRespo.data();
+          const respoId = documentRespo.id;
+
+          let depotsToday = 0;
+
+          // On essaie d'abord avec le champ respoID
+          try {
+            const qDepots = query(
+              collection(db, "depots"),
+              where("date", ">=", Timestamp.fromDate(debutJour)),
+              where("date", "<=", Timestamp.fromDate(finJour)),
+              where("respoID", "==", respoId)
+            );
+            const snapshotDepots = await getDocs(qDepots);
+            depotsToday = snapshotDepots.size;
+          } catch (erreurRespoId) {
+            // Si ça échoue, on essaie avec id_agent
+            try {
+              const qDepotsAlternatif = query(
+                collection(db, "depots"),
+                where("date", ">=", Timestamp.fromDate(debutJour)),
+                where("date", "<=", Timestamp.fromDate(finJour)),
+                where("id_agent", "==", respoId)
+              );
+              const snapshotDepotsAlternatif = await getDocs(qDepotsAlternatif);
+              depotsToday = snapshotDepotsAlternatif.size;
+            } catch (erreurIdAgent) {
+              console.log(
+                "Impossible de lire les dépôts du responsable:",
+                respoId
+              );
+            }
+          }
+
+          const pointsDepot = lireNombre(
+            dataRespo.pointsDepot,
+            dataRespo.point_depot,
+            dataRespo.points_depot
+          );
+
+          const moyenneDay = Math.max(1, Math.round(pointsDepot / 100));
+          const multiplicateur =
+            moyenneDay > 0
+              ? Number((depotsToday / moyenneDay).toFixed(2))
+              : 0;
+          const alerteLocale = multiplicateur >= 3 && depotsToday > 0;
+
+          listeRespo.push({
+            id: respoId,
+            nom: dataRespo.nom || "Responsable inconnu",
+            pointsDepot,
+            depotsToday,
+            moyenneDay,
+            multiplicateur,
+            alerteLocale,
+          });
+        }
+
+        // Trier par nombre de dépôts décroissant
+        listeRespo.sort(function (a, b) {
+          return b.depotsToday - a.depotsToday;
+        });
+
+        setResponsables(listeRespo);
+      },
+      function (erreur) {
+        console.error("Erreur écoute responsables:", erreur);
+        setResponsables([]);
+      }
+    );
+
+    return function () {
+      desabonnerRespo();
+    };
+  }, []);
+
+  // ─── Chargement initial (config + dépôts + semaines) ─────────────────────
+  useEffect(function () {
+    async function chargerTout() {
+      setChargement(true);
+      try {
+        await Promise.all([
+          chargerConfiguration(),
+          chargerDepots(),
+          chargerSemaines(),
+        ]);
+      } catch (e: any) {
+        console.log("Erreur chargement stats:", e?.message || e);
+      } finally {
+        setChargement(false);
+      }
+    }
+
     chargerTout();
   }, []);
 
-  const gainsMois = useMemo(function () {
-    let total = 0;
-
-    for (const etablissement of etablissements) {
-      total += etablissement.montantContrat;
-    }
-
-    return total;
-  }, [etablissements]);
-
-  const variation = useMemo(function () {
-    const maintenant = new Date();
-    const moisActuel = maintenant.getMonth();
-    const moisPrecedent = moisActuel === 0 ? 11 : moisActuel - 1;
-
-    let totalMoisActuel = 0;
-    let totalMoisPrecedent = 0;
-
-    for (const etablissement of etablissements) {
-      const moisRenouvellement = etablissement.dateRenouvellement?.getMonth();
-
-      if (moisRenouvellement === moisActuel) {
-        totalMoisActuel += etablissement.montantContrat;
-      } else if (moisRenouvellement === moisPrecedent) {
-        totalMoisPrecedent += etablissement.montantContrat;
-      }
-    }
-
-    if (totalMoisPrecedent === 0) {
-      return totalMoisActuel > 0 ? 100 : 0;
-    }
-
-    return Math.round(
-      ((totalMoisActuel - totalMoisPrecedent) / totalMoisPrecedent) * 100,
-    );
-  }, [etablissements]);
-
-  const donneesTendanceGains = useMemo(function () {
-    const maintenant = new Date();
-    const donnees: DonneeGraphique[] = [];
-
-    for (let i = 5; i >= 0; i--) {
-      const dateCible = new Date(
-        maintenant.getFullYear(),
-        maintenant.getMonth() - i,
-        1,
-      );
-      let total = 0;
-
-      for (const etablissement of etablissements) {
-        const dateRenouvellement = etablissement.dateRenouvellement;
-        if (
-          dateRenouvellement &&
-          dateRenouvellement.getFullYear() === dateCible.getFullYear() &&
-          dateRenouvellement.getMonth() === dateCible.getMonth()
-        ) {
-          total += etablissement.montantContrat;
-        }
-      }
-
-      donnees.push({
-        x: moisLibelles[dateCible.getMonth()],
-        y: total,
-      });
-    }
-
-    const auMoinsUneValeur = donnees.some(function (item) {
-      return item.y > 0;
-    });
-
-    if (auMoinsUneValeur) {
-      return donnees;
-    }
-
-    return [
-      {
-        x: moisLibelles[maintenant.getMonth()],
-        y: gainsMois,
-      },
-    ];
-  }, [etablissements, gainsMois]);
-
-  async function chargerTout() {
-    setChargement(true);
-
-    try {
-      await Promise.all([
-        chargerConfiguration(),
-        chargerDepots(),
-        chargerSemaines(),
-        chargerEtablissements(),
-        chargerResponsables(),
-      ]);
-    } catch (e: any) {
-      console.log("Erreur chargement stats:", e?.message || e);
-    } finally {
-      setChargement(false);
-    }
-  }
-
+  // ─── Charge les villes et quartiers depuis la collection configuration ────
   async function chargerConfiguration() {
     try {
       const snapshot = await getDoc(doc(db, "configuration", "zones"));
@@ -287,6 +370,7 @@ export default function OngletStatistiques() {
     }
   }
 
+  // ─── Charge les dépôts du jour et les répartit par tranche horaire ────────
   async function chargerDepots() {
     const debutJour = new Date();
     debutJour.setHours(0, 0, 0, 0);
@@ -298,7 +382,7 @@ export default function OngletStatistiques() {
       collection(db, "depots"),
       where("date", ">=", Timestamp.fromDate(debutJour)),
       where("date", "<=", Timestamp.fromDate(finJour)),
-      orderBy("date"),
+      orderBy("date")
     );
 
     const snapshot = await getDocs(q);
@@ -342,12 +426,13 @@ export default function OngletStatistiques() {
     setTotalDepots(snapshot.size);
   }
 
+  // ─── Charge les dépôts du mois et compte les citoyens uniques par semaine ─
   async function chargerSemaines() {
     const maintenant = new Date();
     const debutMois = new Date(
       maintenant.getFullYear(),
       maintenant.getMonth(),
-      1,
+      1
     );
     const finMois = new Date(
       maintenant.getFullYear(),
@@ -356,13 +441,13 @@ export default function OngletStatistiques() {
       23,
       59,
       59,
-      999,
+      999
     );
 
     const q = query(
       collection(db, "depots"),
       where("date", ">=", Timestamp.fromDate(debutMois)),
-      where("date", "<=", Timestamp.fromDate(finMois)),
+      where("date", "<=", Timestamp.fromDate(finMois))
     );
 
     const snapshot = await getDocs(q);
@@ -404,133 +489,101 @@ export default function OngletStatistiques() {
     setDonneesSemaines(
       semaines.map(function (semaine, index) {
         return { x: `Sem ${index + 1}`, y: semaine.size };
-      }),
+      })
     );
   }
 
-  async function chargerEtablissements() {
-    try {
-      const snapshot = await getDocs(collection(db, "etablissements"));
+  // ─── Calcul du total des gains du mois depuis les établissements ──────────
+  const gainsMois = useMemo(function () {
+    let total = 0;
 
-      const liste: Etablissement[] = [];
-      const donneesMap: { [key: string]: DonneeGraphique[] } = {};
-
-      snapshot.docs.forEach(function (documentEtablissement) {
-        const data = documentEtablissement.data();
-        const montantContrat = lireNombre(data.montantContrat, 25000);
-        const dateRenouvellement = convertirEnDate(data.dateRenouvellement);
-
-        const etablissement: Etablissement = {
-          id: documentEtablissement.id,
-          nom: data.nom || data.NomEntreprise || "Établissement",
-          ville: data.ville || "",
-          montantContrat,
-          dateRenouvellement,
-        };
-
-        liste.push(etablissement);
-
-        donneesMap[documentEtablissement.id] = [
-          {
-            x: dateRenouvellement
-              ? moisLibelles[dateRenouvellement.getMonth()]
-              : "Actuel",
-            y: montantContrat,
-          },
-        ];
-      });
-
-      setEtablissements(liste);
-      setDonneesContrats(donneesMap);
-    } catch (e) {
-      console.error("Erreur établissements:", e);
-      setEtablissements([]);
-      setDonneesContrats({});
+    for (const etablissement of etablissements) {
+      total += etablissement.montantContrat;
     }
-  }
 
-  async function chargerResponsables() {
-    try {
-      const snapshotRespo = await getDocs(collection(db, "RespoID"));
-      const listeRespo: Responsable[] = [];
+    return total;
+  }, [etablissements]);
 
-      const debutJour = new Date();
-      debutJour.setHours(0, 0, 0, 0);
+  // ─── Calcul de la variation entre mois actuel et mois précédent ──────────
+  const variation = useMemo(function () {
+    const maintenant = new Date();
+    const moisActuel = maintenant.getMonth();
+    const moisPrecedent = moisActuel === 0 ? 11 : moisActuel - 1;
 
-      const finJour = new Date();
-      finJour.setHours(23, 59, 59, 999);
+    let totalMoisActuel = 0;
+    let totalMoisPrecedent = 0;
 
-      for (const documentRespo of snapshotRespo.docs) {
-        const dataRespo = documentRespo.data();
-        const respoId = documentRespo.id;
+    for (const etablissement of etablissements) {
+      const moisRenouvellement = etablissement.dateRenouvellement?.getMonth();
 
-        let depotsToday = 0;
+      if (moisRenouvellement === moisActuel) {
+        totalMoisActuel += etablissement.montantContrat;
+      } else if (moisRenouvellement === moisPrecedent) {
+        totalMoisPrecedent += etablissement.montantContrat;
+      }
+    }
 
-        try {
-          const qDepots = query(
-            collection(db, "depots"),
-            where("date", ">=", Timestamp.fromDate(debutJour)),
-            where("date", "<=", Timestamp.fromDate(finJour)),
-            where("respoID", "==", respoId),
-          );
-          const snapshotDepots = await getDocs(qDepots);
-          depotsToday = snapshotDepots.size;
-        } catch (erreurRespoId) {
-          try {
-            const qDepotsAlternatif = query(
-              collection(db, "depots"),
-              where("date", ">=", Timestamp.fromDate(debutJour)),
-              where("date", "<=", Timestamp.fromDate(finJour)),
-              where("id_agent", "==", respoId),
-            );
-            const snapshotDepotsAlternatif = await getDocs(qDepotsAlternatif);
-            depotsToday = snapshotDepotsAlternatif.size;
-          } catch (erreurIdAgent) {
-            console.log(
-              "Impossible de lire les dépôts du responsable:",
-              respoId,
-              erreurRespoId || erreurIdAgent,
-            );
-          }
+    if (totalMoisPrecedent === 0) {
+      return totalMoisActuel > 0 ? 100 : 0;
+    }
+
+    return Math.round(
+      ((totalMoisActuel - totalMoisPrecedent) / totalMoisPrecedent) * 100
+    );
+  }, [etablissements]);
+
+  // ─── Calcul de la tendance des gains sur 6 mois ──────────────────────────
+  const donneesTendanceGains = useMemo(function () {
+    const maintenant = new Date();
+    const donnees: DonneeGraphique[] = [];
+
+    for (let i = 5; i >= 0; i--) {
+      const dateCible = new Date(
+        maintenant.getFullYear(),
+        maintenant.getMonth() - i,
+        1
+      );
+      let total = 0;
+
+      for (const etablissement of etablissements) {
+        const dateRenouvellement = etablissement.dateRenouvellement;
+        if (
+          dateRenouvellement &&
+          dateRenouvellement.getFullYear() === dateCible.getFullYear() &&
+          dateRenouvellement.getMonth() === dateCible.getMonth()
+        ) {
+          total += etablissement.montantContrat;
         }
-
-        const pointsDepot = lireNombre(
-          dataRespo.pointsDepot,
-          dataRespo.point_depot,
-          dataRespo.points_depot,
-        );
-
-        const moyenneDay = Math.max(1, Math.round(pointsDepot / 100));
-        const multiplicateur =
-          moyenneDay > 0 ? Number((depotsToday / moyenneDay).toFixed(2)) : 0;
-        const alerteLocale = multiplicateur >= 3 && depotsToday > 0;
-
-        listeRespo.push({
-          id: respoId,
-          nom: dataRespo.nom || "Responsable inconnu",
-          pointsDepot,
-          depotsToday,
-          moyenneDay,
-          multiplicateur,
-          alerteLocale,
-        });
       }
 
-      listeRespo.sort(function (a, b) {
-        return b.depotsToday - a.depotsToday;
+      donnees.push({
+        x: moisLibelles[dateCible.getMonth()],
+        y: total,
       });
-
-      setResponsables(listeRespo);
-    } catch (e) {
-      console.error("Erreur responsables:", e);
-      setResponsables([]);
     }
-  }
 
+    const auMoinsUneValeur = donnees.some(function (item) {
+      return item.y > 0;
+    });
+
+    if (auMoinsUneValeur) {
+      return donnees;
+    }
+
+    return [
+      {
+        x: moisLibelles[new Date().getMonth()],
+        y: gainsMois,
+      },
+    ];
+  }, [etablissements, gainsMois]);
+
+  // ─── Ouvre ou ferme le détail d'un partenaire ────────────────────────────
   function togglePartenaire(id: string) {
     setPartenaireOuvert(partenaireOuvert === id ? null : id);
   }
 
+  // ─── Composant carte des quartiers avec sélection de ville ───────────────
   function CarteQuartiers() {
     const quartiersVille = quartiers.filter(function (quartier) {
       return quartier.ville === villeSelectionnee;
@@ -675,34 +728,39 @@ export default function OngletStatistiques() {
     );
   }
 
+  // ─── Composant d'un quartier individuel avec sa côte en temps réel ────────
   function QuartierItem({ quartier }: { quartier: Quartier }) {
     const [iconeCote, setIconeCote] = useState("🔴");
     const [score, setScore] = useState(0);
 
-    useEffect(() => {
-      async function loadCote() {
-        try {
-          const snap = await getDoc(doc(db, "cote", quartier.nom));
-
+    useEffect(function () {
+      // Lecture en temps réel de la côte du quartier
+      const desabonner = onSnapshot(
+        doc(db, "cote", quartier.nom),
+        function (snap) {
           if (snap.exists()) {
-            const scoreTotal = lireNombre(snap.data().score_total, 0);
+            const scoreTotal = lireNombre(snap.data().score_total, snap.data().score, 0);
             setScore(scoreTotal);
             setIconeCote(
-              scoreTotal >= 80 ? "🟢" : scoreTotal >= 40 ? "🟠" : "🔴",
+              scoreTotal >= 80 ? "🟢" : scoreTotal >= 40 ? "🟠" : "🔴"
             );
           }
-        } catch (e) {
-          console.error(e);
+        },
+        function (e) {
+          console.error("Erreur côte quartier:", e);
         }
-      }
+      );
 
-      loadCote();
+      // Nettoyage du listener
+      return function () {
+        desabonner();
+      };
     }, [quartier.nom]);
 
     return (
       <TouchableOpacity
         style={{
-          width: width * 0.2,
+          width: width * 0.3,
           backgroundColor: couleur.marine,
           paddingVertical: 18,
           paddingHorizontal: 4,
@@ -740,6 +798,7 @@ export default function OngletStatistiques() {
     );
   }
 
+  // ─── Affichage du spinner pendant le chargement initial ──────────────────
   if (chargement) {
     return (
       <ActivityIndicator
@@ -750,13 +809,16 @@ export default function OngletStatistiques() {
     );
   }
 
+  // ─── RENDU PRINCIPAL ─────────────────────────────────────────────────────
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
       <View style={{ flex: 1 }}>
         <Text style={stylesTitre.titre}>Statistiques</Text>
 
+        {/* Carte des quartiers visible en permanence */}
         <CarteQuartiers />
 
+        {/* Barre de navigation entre les 5 onglets */}
         <View
           style={{
             flexDirection: "row",
@@ -772,11 +834,7 @@ export default function OngletStatistiques() {
             { id: "semaines", icone: "calendar", label: "Semaines" },
             { id: "contrats", icone: "storefront", label: "Contrats" },
             { id: "gains", icone: "trending-up", label: "Gains" },
-            {
-              id: "responsables",
-              icone: "people",
-              label: "Responsables",
-            },
+            { id: "responsables", icone: "people", label: "Responsables" },
           ].map(function (vue) {
             const actif = vueActive === vue.id;
 
@@ -817,6 +875,7 @@ export default function OngletStatistiques() {
           })}
         </View>
 
+        {/* ── VUE DÉPÔTS ─────────────────────────────────────────────────── */}
         {vueActive === "depots" && (
           <>
             <View>
@@ -838,7 +897,7 @@ export default function OngletStatistiques() {
                 <VictoryChart
                   height={240}
                   padding={{ top: 20, bottom: 65, left: 50, right: 20 }}
-                  domainPadding={{ x: [10, 10] }}
+                  domainPadding={{ x: [3, 10] }}
                 >
                   <VictoryAxis
                     tickValues={donneesDepots.map(function (item) {
@@ -857,6 +916,9 @@ export default function OngletStatistiques() {
                   <VictoryAxis
                     dependentAxis
                     tickCount={6}
+                    tickValues={donneesDepots.map(function (item) {
+                      return item.y;
+                    })}
                     style={{
                       axis: { stroke: "#ccc" },
                       tickLabels: { fill: "#ccc", fontSize: 10 },
@@ -898,6 +960,7 @@ export default function OngletStatistiques() {
           </>
         )}
 
+        {/* ── VUE SEMAINES ───────────────────────────────────────────────── */}
         {vueActive === "semaines" && (
           <View>
             <Text style={stylesTitre.titre}>Citoyens actifs</Text>
@@ -921,8 +984,12 @@ export default function OngletStatistiques() {
               <VictoryChart
                 height={240}
                 padding={{ top: 20, bottom: 50, left: 50, right: 20 }}
+                domainPadding={{ x: [0.5, 10] }}
               >
                 <VictoryAxis
+                  tickValues={donneesSemaines.map(function (item) {
+                      return item.x;
+                    })}
                   style={{
                     axis: { stroke: "#ccc" },
                     tickLabels: { fill: "#ccc", fontSize: 11 },
@@ -930,6 +997,10 @@ export default function OngletStatistiques() {
                 />
                 <VictoryAxis
                   dependentAxis
+                  tickCount={6}
+                    tickValues={donneesSemaines.map(function (item) {
+                      return item.y;
+                    })}
                   style={{
                     axis: { stroke: "#ccc" },
                     tickLabels: { fill: "#ccc", fontSize: 10 },
@@ -949,6 +1020,7 @@ export default function OngletStatistiques() {
           </View>
         )}
 
+        {/* ── VUE CONTRATS ───────────────────────────────────────────────── */}
         {vueActive === "contrats" && (
           <View>
             <Text style={stylesTitre.titre}>Contrats partenaires</Text>
@@ -1051,15 +1123,13 @@ export default function OngletStatistiques() {
                             style={{ color: "#ccc", fontSize: 12, marginTop: 4 }}
                           >
                             Renouvellement :{" "}
-                            {formaterDateCourte(
-                              etablissement.dateRenouvellement,
-                            )}
+                            {formaterDateCourte(etablissement.dateRenouvellement)}
                           </Text>
                         </View>
 
                         <ScrollView
                           horizontal
-                          showsHorizontalScrollIndicator={true}
+                          showsHorizontalScrollIndicator={false}
                         >
                           <VictoryChart
                             width={360}
@@ -1073,6 +1143,9 @@ export default function OngletStatistiques() {
                             domainPadding={{ x: [40, 40] }}
                           >
                             <VictoryAxis
+                              tickValues={donneesContrats[etablissement.id].map(function (item) {
+                                return item.x;
+                              })}
                               style={{
                                 axis: { stroke: "#ccc" },
                                 tickLabels: {
@@ -1083,6 +1156,10 @@ export default function OngletStatistiques() {
                             />
                             <VictoryAxis
                               dependentAxis
+                              tickCount={6}
+                              tickValues={donneesContrats[etablissement.id].map(function (item) {
+                                return item.y;
+                              })}
                               tickFormat={(t) => `${Math.round(t / 1000)}k`}
                               style={{
                                 axis: { stroke: "#ccc" },
@@ -1096,16 +1173,6 @@ export default function OngletStatistiques() {
                             />
                           </VictoryChart>
                         </ScrollView>
-                        <Text
-                          style={{
-                            color: "#ccc",
-                            fontSize: 10,
-                            textAlign: "center",
-                            marginTop: 4,
-                          }}
-                        >
-                          Montant réel lu depuis la collection établissements
-                        </Text>
                       </View>
                     )}
                   </View>
@@ -1115,6 +1182,7 @@ export default function OngletStatistiques() {
           </View>
         )}
 
+        {/* ── VUE GAINS ──────────────────────────────────────────────────── */}
         {vueActive === "gains" && (
           <View>
             <Text style={stylesTitre.titre}>Gains Hyzakam</Text>
@@ -1144,7 +1212,7 @@ export default function OngletStatistiques() {
                   {formaterMontant(gainsMois)}
                 </Text>
                 <Text style={{ color: "#ccc", fontSize: 11, marginTop: 4 }}>
-                  Total des contrats
+                  Total gains du mois des contrats
                 </Text>
               </View>
 
@@ -1166,9 +1234,7 @@ export default function OngletStatistiques() {
                       : "trending-down-outline"
                   }
                   size={26}
-                  color={
-                    variation >= 0 ? couleur.turquoise : couleur.erreurClair
-                  }
+                  color={variation >= 0 ? couleur.turquoise : couleur.erreurClair}
                 />
                 <Text
                   style={{
@@ -1208,7 +1274,8 @@ export default function OngletStatistiques() {
                   name="warning-outline"
                   size={22}
                   color={couleur.erreurClair}
-                />
+                /> 
+                {/* enlever cette partie apres le test de la cloud function charger du calcul des montants des contrats */}
                 <Text style={{ color: couleur.blanc, flex: 1 }}>
                   ⚠️{" "}
                   {
@@ -1258,8 +1325,12 @@ export default function OngletStatistiques() {
               <VictoryChart
                 height={220}
                 padding={{ top: 20, bottom: 50, left: 70, right: 20 }}
+                domainPadding={{ x: [0, 4] }}
               >
                 <VictoryAxis
+                  tickValues={donneesTendanceGains.map(function (item) {
+                      return item.x;
+                    })}
                   style={{
                     axis: { stroke: "#ccc" },
                     tickLabels: { fill: "#ccc", fontSize: 11 },
@@ -1267,6 +1338,10 @@ export default function OngletStatistiques() {
                 />
                 <VictoryAxis
                   dependentAxis
+                  tickCount={6}
+                  tickValues={donneesTendanceGains.map(function (item) {
+                      return item.y;
+                    })}
                   tickFormat={(t) => `${Math.round(t / 1000)}k`}
                   style={{
                     axis: { stroke: "#ccc" },
@@ -1350,12 +1425,12 @@ export default function OngletStatistiques() {
           </View>
         )}
 
+        {/* ── VUE RESPONSABLES ───────────────────────────────────────────── */}
         {vueActive === "responsables" && (
           <View>
             <Text style={stylesTitre.titre}>Responsables</Text>
             <Text style={{ color: "#ccc", fontSize: 12, marginBottom: 15 }}>
-              Métriques locales calculées à partir de RespoID et des dépôts du
-              jour
+              Récapitulatif du travail de vos agents de collecte
             </Text>
 
             <View
@@ -1371,9 +1446,18 @@ export default function OngletStatistiques() {
               <VictoryChart
                 height={240}
                 padding={{ top: 20, bottom: 55, left: 50, right: 20 }}
-                domainPadding={{ x: 20 }}
+                domainPadding={{ x: 30 }}
+                domain={{y:[0,10]}}
               >
                 <VictoryAxis
+                  tickValues={responsables.map(function (item) {
+                    return {
+                      x:
+                        item.nom.length > 8
+                          ? `${item.nom.slice(0, 8)}...`
+                          : item.nom
+                    };
+                  })}
                   style={{
                     axis: { stroke: "#ccc" },
                     tickLabels: { fill: "#ccc", fontSize: 9, angle: -20 },
@@ -1381,17 +1465,20 @@ export default function OngletStatistiques() {
                 />
                 <VictoryAxis
                   dependentAxis
+                  tickCount={6}
+                  tickFormat={(t) => `${Math.round(t)}`}
                   style={{
-                    axis: { stroke: "#ccc" },
+                    axis: { stroke: "#ccc",height:200 },
                     tickLabels: { fill: "#ccc", fontSize: 10 },
                   }}
                 />
                 <VictoryBar
                   data={responsables.map(function (item) {
                     return {
-                      x: item.nom.length > 8
-                        ? `${item.nom.slice(0, 8)}...`
-                        : item.nom,
+                      x:
+                        item.nom.length > 8
+                          ? `${item.nom.slice(0, 8)}...`
+                          : item.nom,
                       y: item.depotsToday,
                     };
                   })}
@@ -1459,9 +1546,7 @@ export default function OngletStatistiques() {
                             fontWeight: "bold",
                           }}
                         >
-                          {responsable.alerteLocale
-                            ? "Surveillance"
-                            : "Normal"}
+                          {responsable.alerteLocale ? "Surveillance" : "Normal"}
                         </Text>
                       </View>
                     </View>

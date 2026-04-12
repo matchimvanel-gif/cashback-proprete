@@ -1,0 +1,41 @@
+**MÉMOIRE PROJET - CASHBACK PROPRETÉ** (dernière mise à jour: 2024)
+
+**Instructions critiques (.grokrules)**:
+- Français partout (réponses + app + comments).
+- Ne jamais casser code existant (analyser imports).
+- 100% Expo 51/Node/React Native compatible.
+- Ajouter TOUTES infos ici.
+- infoProjet/@cash → contexte/DB screenshots.
+- Cloud Functions → /project-memory/CLOUD_FUNCTIONS.txt.
+- Rules → /project-memory/FIRESTORE_RULES.txt.
+
+**Collections exactes** (from info_contexte_projet.txt + screenshots):
+- utilisateurs: uid, role, point, total_reductions, email, nom, quartier, ville.
+- depots: id_citoyen, id_agent, date (Timestamp), point.
+- coupons: id_citoyen, code, points, statut (disponible/utilisé/expiré), id_etablissement, offre, utilise (bool).
+- etablissements: createAt, id_contrat, id_etablissement, nom, produit_luxe[], produit_standard[], montantContrat (25000 default), updateAt, dateRenouvellement.
+- alertes: nom, multiplicateur, date, traite, occurence.
+- configuration: zones (villes/quartiers), categorie_mini/petit/moyen (bonus_trie, nom, option_poids, point_correspondant).
+- bacs (id = uid responsable): capacite_max, derniere_collecte, etat, localisation, remplissage_actuel (0-100).
+- cote: nom_quartier, score_total.
+- signalements: id_auteur, type (bac_plein/infraction), latitude/longitude, traite.
+- partenaires/RespoID: per context.
+
+**Rôles**:
+- Citoyen, Responsable, Établissement, Hyzakam.
+
+**Barème** (exact screenshots):
+- Mini <100g: 1pt
+- Petit: 1/3/5
+- Moyen: 6/10/15/20
+- Grand: 30/50/100
+
+**État projet** (fichiers key):
+- app/(tabs)/citoyen.tsx, etablissement.tsx (null), hyzakam.tsx, responsable.tsx (fixed).
+- components/hyzakam/* (Phase 1 OK).
+- functions/src/addDepot.js (ready deploy `firebase deploy --only functions`).
+
+**Prochain**:
+- Fix Phase 2 citoyen (ongletCoupons: coupons not depots, expo-camera).
+- Deploy rules/functions.
+

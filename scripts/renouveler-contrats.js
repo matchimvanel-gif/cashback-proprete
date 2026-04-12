@@ -1,13 +1,8 @@
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 
-<<<<<<< HEAD
-// Initialiser Firebase
-=======
-console.log("🚀 Début du renouvellement des contrats...");
-
->>>>>>> test_black
-initializeApp({
+// Initialisation avec les secrets GitHub (configurés dans ton YAML)
+const app = initializeApp({
   credential: cert({
     projectId: process.env.FIREBASE_PROJECT_ID,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
@@ -15,103 +10,40 @@ initializeApp({
   })
 });
 
-const db = getFirestore();
-const maintenant = new Date();
-let nombreMisAJour = 0;
+const db = getFirestore(app);
 
-<<<<<<< HEAD
-// Récupérer tous les établissements
-const snapshot = await db.collection('etablissements').get();
+async function executerRenouvellement() {
+  console.log("Vérification des contrats établissements...");
+  const maintenant = new Date();
+  let compteur = 0;
 
-for (const doc of snapshot.docs) {
-  const data = doc.data();
-  let doitRenouveler = false;
+  try {
+    const snapshot = await db.collection('etablissements').get();
 
-  if (!data.dateRenouvellement) {
-    // Le champ n'existe pas encore
-    doitRenouveler = true;
-    console.log('Champ manquant pour : ' + doc.id);
-  } else {
-    const dateRenouvellement = new Date(data.dateRenouvellement);
-    const differenceJours = (maintenant - dateRenouvellement) / (1000 * 60 * 60 * 24);
-    if (differenceJours > 30) {
-      doitRenouveler = true;
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      let expiration = data.dateRenouvellement ? new Date(data.dateRenouvellement) : null;
+
+      // Si pas de date ou si la date est dépassée (30 jours)
+      if (!expiration || (maintenant - expiration) / (1000 * 60 * 60 * 24) >= 30) {
+        const nouvelleDate = new Date();
+        nouvelleDate.setDate(nouvelleDate.getDate() + 30);
+
+        await doc.ref.set({
+          montantContrat: 25000,
+          dateRenouvellement: nouvelleDate.toISOString(),
+          updatedAt: maintenant.toISOString()
+        }, { merge: true });
+
+        compteur++;
+        console.log(`Contrat mis à jour : ${doc.id}`);
+      }
     }
-  }
-
-  if (doitRenouveler) {
-    const nouvelleDate = new Date(maintenant);
-    nouvelleDate.setDate(nouvelleDate.getDate() + 30);
-
-    await doc.ref.set({
-      montantContrat: 25000,
-      dateRenouvellement: nouvelleDate.toISOString(),
-      updatedAt: maintenant.toISOString()
-    }, { merge: true });
-
-    nombreMisAJour++;
-    console.log('Contrat renouvelé : ' + doc.id);
+    console.log(`Opération terminée. ${compteur} contrats renouvelés.`);
+  } catch (err) {
+    console.error("Erreur lors du renouvellement :", err.message);
+    process.exit(1);
   }
 }
 
-console.log('Terminé - ' + nombreMisAJour + ' contrat(s) renouvelé(s)');
-=======
-try {
-  const snapshot = await db.collection('etablissements').get();
-
-  console.log(`📊 ${snapshot.size} établissements trouvés dans la collection`);
-
-  for (const doc of snapshot.docs) {
-    const data = doc.data();
-    const docId = doc.id;
-
-    console.log(`🔍 Vérification document : ${docId}`);
-
-    let doitRenouveler = false;
-
-    // Vérification sécurisée de la date
-    let dateRenouvellement = null;
-    if (data.dateRenouvellement) {
-      try {
-        dateRenouvellement = new Date(data.dateRenouvellement);
-        if (isNaN(dateRenouvellement.getTime())) {
-          dateRenouvellement = null; // date invalide
-        }
-      } catch (e) {
-        dateRenouvellement = null;
-      }
-    }
-
-    if (!dateRenouvellement) {
-      console.log(`⚠️  Pas de date valide pour ${docId} → renouvellement forcé`);
-      doitRenouveler = true;
-    } else {
-      const differenceJours = (maintenant - dateRenouvellement) / (1000 * 60 * 60 * 24);
-      console.log(`📅 Date : ${dateRenouvellement.toISOString()} | Différence : ${differenceJours.toFixed(1)} jours`);
-
-      if (differenceJours > 30) {
-        doitRenouveler = true;
-      }
-    }
-
-    if (doitRenouveler) {
-      const nouvelleDate = new Date(maintenant);
-      nouvelleDate.setDate(nouvelleDate.getDate() + 30);
-
-      await doc.ref.set({
-        montantContrat: 25000,
-        dateRenouvellement: nouvelleDate,   // Firebase acceptera le Date object
-        updatedAt: maintenant
-      }, { merge: true });
-
-      nombreMisAJour++;
-      console.log(`✅ Contrat renouvelé pour ${docId}`);
-    }
-  }
-
-  console.log(`🎉 FIN - ${nombreMisAJour} contrat(s) renouvelé(s)`);
-
-} catch (error) {
-  console.error("❌ Erreur générale :", error.message);
-}
->>>>>>> test_black
+executerRenouvellement();
