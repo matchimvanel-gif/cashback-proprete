@@ -1,183 +1,262 @@
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║   CASHBACK PROPRETÉ — FIRESTORE SECURITY RULES COMPLÈTES               ║
+// ║   À copier-coller dans Firebase Console > Firestore > Rules             ║
+// ║   Ou dans le fichier firestore.rules du projet                          ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+//
+// PRINCIPE GÉNÉRAL :
+//   - Jamais de modification des point depuis l'app → uniquement Cloud Functions
+//   - Jamais de création de coupons depuis l'app → uniquement Cloud Functions
+//   - Un dépôt est immuable (pas de update ni delete)
+//   - Chaque rôle n'accède qu'aux données nécessaires à sa fonction
+//   - Les Cloud Functions Admin SDK ignorent ces rules (accès total)
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ================================================================
-    // FONCTIONS UTILITAIRES firebase deploy --only firestore:rules // firebase deploy --only firestore:rules --debug
-    // ================================================================
+    // ─── HELPERS RÉUTILISABLES ───────────────────────────────────────────────
 
-    function estConnecte() {
+    // Vérifie que l'utilisateur est authentifié
+    function estAuthentifie() {
       return request.auth != null;
     }
 
+    // Récupère le rôle de l'utilisateur connecté
     function monRole() {
       return get(/databases/$(database)/documents/utilisateurs/$(request.auth.uid)).data.role;
     }
 
-    function estCitoyen()       { return estConnecte() && monRole() == 'citoyen'; }
-    function estResponsable()   { return estConnecte() && monRole() == 'responsable'; }
-    function estEtablissement() { return estConnecte() && monRole() == 'etablissement'; }
-    function estHyzakam()       { return estConnecte() && monRole() == 'hyzakam'; }
-    function estMairie()        { return estConnecte() && monRole() == 'mairie'; }
-    function estAdmin()         { return estHyzakam() || estMairie(); }
+    // Vérifie le rôle de l'utilisateur connecté
+    function aLeRole(role) {
+      return estAuthentifie() && monRole() == role;
+    }
 
+    // Vérifie si c'est l'admin Hyzakam (uid connu ou rôle hyzakam)
+    function estHyzakam() {
+      return estAuthentifie() && (
+        request.auth.uid == 'cJdPoZIqE8a6hnSmPNO348TB2hI2' ||
+        monRole() == 'hyzakam'
+      );
+    }
+
+    // Vérifie que l'utilisateur accède à ses propres données
     function estProprietaire(userId) {
-      return estConnecte() && request.auth.uid == userId;
+      return estAuthentifie() && request.auth.uid == userId;
     }
 
-    // ================================================================
+    // ═══════════════════════════════════════════════════════════════════════════
     // COLLECTION : utilisateurs
-    // ================================================================
+    // ═══════════════════════════════════════════════════════════════════════════
     match /utilisateurs/{userId} {
-      allow read: if true;
-      allow create: if true;
-      allow update: if true;
+      // Lecture : chaque utilisateur voit ses données | Hyzakam voit tout
+      allow read: if estProprietaire(userId) || estHyzakam();
+
+      // Création : uniquement lors de l'inscription (l'utilisateur crée son propre doc)
+      // IMPORTANT : les point ne peuvent pas être écrits directement (seul "point" du doc est bloqué)
+      allow create: if estProprietaire(userId) &&
+        !('point' in request.resource.data) || request.resource.data.point == 0;
+
+      // Modification : l'utilisateur peut modifier son profil
+      // MAIS IL NE PEUT JAMAIS MODIFIER SON SOLDE DE POINTS (uniquement Cloud Functions)
+      allow update: if estProprietaire(userId) &&
+        !('point' in request.resource.data.diff(resource.data).affectedKeys()) &&
+        !('role' in request.resource.data.diff(resource.data).affectedKeys());
+
+      // Hyzakam peut modifier les rôles et voir tout
+      allow write: if estHyzakam();
+
+      // Suppression : interdite pour tout le monde (traçabilité)
       allow delete: if false;
     }
 
-    // ================================================================
-    // COLLECTION : invitations_hysakam
-    // ================================================================
-    match /invitations_hysakam/{invitationId} {
-      allow get : if true;
-      allow list: if false;
-      allow create: if estHyzakam()
-                    && request.resource.data.keys().hasAll(['expire_le', 'utilise', 'role'
-                     ])
-                    && request.resource.data.role in ['responsable', 'etablissement']
-                    && request.resource.data.utilise == false;
-      allow update: if estHyzakam()
-                    && request.resource.data.diff(resource.data)
-                       .affectedKeys().hasOnly(['utilise'])
-                    && resource.data.utilise         == false
-                    && request.resource.data.utilise == true;
-      allow delete: if false;
-    }
-
-    // ================================================================
+    // ═══════════════════════════════════════════════════════════════════════════
     // COLLECTION : depots
-    // ================================================================
+    // IMMUABLE — jamais de update ni delete
+    // ═══════════════════════════════════════════════════════════════════════════
     match /depots/{depotId} {
-      allow read: if (estCitoyen()     && resource.data.id_citoyen == request.auth.uid)
-                  || (estResponsable() && resource.data.id_agent   == request.auth.uid)
-                  || estAdmin();
-      allow create: if estResponsable()
-                    && request.resource.data.id_agent == request.auth.uid
-                    && request.resource.data.keys().hasAll([
-                       'id_citoyen', 'id_agent', 'valeur_poids',
-                       'points_gagnes', 'date'
-                     ])
-                    && request.resource.data.points_gagnes >= 0
-                    && request.resource.data.valeur_poids  >  0;
-      allow update, delete: if false;
-    }
+      // Le citoyen voit ses propres dépôts (pour ongletHistorique)
+      allow read: if estAuthentifie() && (
+        resource.data.id_citoyen == request.auth.uid ||
+        resource.data.id_citoyen == request.auth.uid ||
+        aLeRole('responsable') ||
+        estHyzakam()
+      );
 
-    // ================================================================
-    // COLLECTION : coupons
-    // ================================================================
-    match /coupons/{couponId} {
-      allow read: if (estCitoyen()        && resource.data.id_citoyen == request.auth.uid)
-                  || estEtablissement()
-                  || estAdmin();
+      // AUCUNE création depuis l'app — uniquement via Cloud Function enregistrerDepot()
       allow create: if false;
-      allow update: if estEtablissement()
-                    && request.resource.data.diff(resource.data)
-                       .affectedKeys().hasOnly(['statut'])
-                    && resource.data.statut         == 'disponible'
-                    && request.resource.data.statut == 'utilise';
+
+      // JAMAIS de modification ni suppression — traçabilité garantie
+      allow update: if false;
       allow delete: if false;
     }
 
-    // ================================================================
-    // COLLECTION : etablissements
-    // ================================================================
-    match /etablissements/{etablissementId} {
-      allow read: if true;
-      allow create: if true;
-      allow update : if estEtablissement()|| estHyzakam()
-      allow delete: if estHyzakam();
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : coupons
+    // CRÉATION INTERDITE depuis l'app — uniquement via creerCouponsCitoyen()
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /coupons/{couponId} {
+      // Lecture : le citoyen voit ses coupons | Hyzakam et établissements aussi
+      allow read: if estAuthentifie() && (
+        resource.data.id_citoyen == request.auth.uid ||
+        resource.data.id_citoyen == request.auth.uid ||
+        aLeRole('etablissement') ||
+        estHyzakam()
+      );
+
+      // AUCUNE création depuis l'app
+      allow create: if false;
+
+      // AUCUNE modification depuis l'app (passage en "utilise" par Cloud Function validerCoupon)
+      allow update: if false;
+
+      // Jamais de suppression
+      allow delete: if false;
     }
 
-    // ================================================================
-    // COLLECTION : configuration
-    // ================================================================
-    match /configuration/{docId} {
-      allow read:  if true;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : etablissements
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /etablissements/{etablissementId} {
+      // Tout utilisateur authentifié peut voir la liste des établissements
+      // (pour l'écran "boutiques partenaires" du citoyen)
+      allow read: if estAuthentifie();
+
+      // Création : un établissement peut créer sa propre demande
+      allow create: if estProprietaire(etablissementId) && aLeRole('etablissement');
+
+      // Modification : uniquement l'établissement lui-même pour ses infos de profil
+      // Les champs critiques (statut, montantContrat) sont réservés aux Cloud Functions
+      allow update: if estProprietaire(etablissementId) &&
+        !('statut' in request.resource.data.diff(resource.data).affectedKeys()) &&
+        !('montantContrat' in request.resource.data.diff(resource.data).affectedKeys()) &&
+        !('dateRenouvellement' in request.resource.data.diff(resource.data).affectedKeys());
+
+      // Hyzakam a un accès total
+      allow write: if estHyzakam();
+
+      // Suppression : interdite
+      allow delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : partenaires (demandes d'adhésion)
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /partenaires/{partenaireId} {
+      // Tous les citoyens peuvent voir la liste (pour "boutiques")
+      allow read: if estAuthentifie();
+
+      // Création : un établissement peut soumettre sa demande
+      allow create: if estAuthentifie() && aLeRole('etablissement');
+
+      // Modification : uniquement Hyzakam (validation/refus)
+      allow update: if estHyzakam();
+
+      allow delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : signalements
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /signalements/{signalementId} {
+      // Hyzakam voit tous les signalements | le responsable voit ses signalements
+      allow read: if estAuthentifie() && (
+        estHyzakam() ||
+        resource.data.respoId == request.auth.uid ||
+        resource.data.id_auteur == request.auth.uid
+      );
+
+      // Création : uniquement via Cloud Function (automatique quand bac plein)
+      allow create: if false;
+
+      // Modification : uniquement Hyzakam (via Cloud Function traiterSignalement)
+      allow update: if false;
+
+      allow delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : cote (côte des quartiers)
+    // Visible SANS connexion (accessible à tous)
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /cote/{quartier} {
+      // Lecture publique (sans connexion) — la côte est visible par tous
+      allow read: if true;
+
+      // Modification : uniquement Cloud Functions (recalculerCoteQuartier)
+      allow create, update, delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : bacs
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /bacs/{bacId} {
+      // Lecture : tout utilisateur authentifié (pour la carte des bacs)
+      allow read: if estAuthentifie();
+
+      // Modification : uniquement Cloud Functions
+      allow create, update, delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : alertes (responsables suspects)
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /alertes/{alerteId} {
+      // Hyzakam voit toutes les alertes
+      allow read: if estHyzakam();
+
+      // Création/modification : uniquement Cloud Functions
+      allow create, update, delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : configuration (barèmes, quartiers, villes)
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /configuration/{configId} {
+      // Lecture publique — les barèmes sont visibles à tous
+      allow read: if true;
+
+      // Modification : uniquement Hyzakam
       allow write: if estHyzakam();
     }
 
-    // ================================================================
-    // COLLECTION : cote
-    // ================================================================
-    match /cote/{quartier} {
-      allow read:           if estConnecte();
-      allow create, update: if estAdmin() || estHyzakam();
-      allow delete:         if false;
-    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : RespoID (codes d'invitation des responsables)
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /RespoID/{codeId} {
+      // Lecture : tout utilisateur authentifié (pour valider son code à l'inscription)
+      allow read: if estAuthentifie();
 
-    // ================================================================
-    // COLLECTION : signalements
-    // ================================================================
-    match /signalements/{signalementId} {
-      allow read: if (estCitoyen()     && resource.data.id_auteur == request.auth.uid)
-                  || (estResponsable() && resource.data.id_auteur == request.auth.uid)
-                  || estHyzakam()
-                  || (estMairie()      && resource.data.type == 'infraction');
-      allow create: if (estCitoyen() || estResponsable())
-                    && request.resource.data.id_auteur == request.auth.uid
-                    && request.resource.data.keys().hasAll([
-                       'type', 'id_auteur', 'date', 'traite',
-                       'latitude', 'longitude'
-                     ])
-                    && request.resource.data.type in ['bac_plein', 'infraction']
-                    && request.resource.data.traite == false
-                    && (request.resource.data.type == 'infraction'
-                        || estResponsable());
-      allow update: if estHyzakam()
-                    && request.resource.data.diff(resource.data)
-                       .affectedKeys().hasOnly(['traite'])
-                    && resource.data.traite         == false
-                    && request.resource.data.traite == true;
-      allow delete: if false;
-    }
-
-    // ================================================================
-    // COLLECTION : alertes
-    // ================================================================
-    match /alertes/{alerteId} {
-      allow read:   if estHyzakam();
-      allow create: if estHyzakam();
-      allow update: if estHyzakam()
-                    && request.resource.data.diff(resource.data)
-                       .affectedKeys().hasOnly(['traite'])
-                    && resource.data.traite         == false
-                    && request.resource.data.traite == true;
-      allow delete: if false;
-    }
-
-    // ================================================================
-    // COLLECTION : partenaires
-    // ================================================================
-    match /partenaires/{partenaireId} {
-      allow read:if true;
-      allow update: if true;
-      allow delete: if false;
-    }
-
-    // ================================================================
-    // **NOUVELLE COLLECTION : responsables** (FIX PERMISSIONS)
-    // ================================================================
-    match /responsables/{respoId} {
-      allow read: if estHyzakam();
+      // Création/modification : uniquement Hyzakam (il crée les codes)
       allow create, update: if estHyzakam();
+
+      // Suppression : interdite (traçabilité des invitations)
       allow delete: if false;
     }
 
-    // ================================================================
-    // COLLECTION : RespoID
-    // ================================================================
-match /RespoID/{respoID} {\n      allow read, list: if estHyzakam() || estResponsable();\n      allow create: if estHyzakam();\n      allow update: if estHyzakam();\n      allow delete: if false;\n    }\n\n    match /bacs/{bacId} {\n      allow read: if estResponsable() && request.auth.uid == bacId;\n      allow read: if estHyzakam();\n      allow create, update: if estHyzakam();\n      allow delete: if false;\n    }
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : invitations_hyzakam (codes d'invitation citoyens)
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /invitations_hyzakam/{invitationId} {
+      // Lecture : pour valider le code à l'inscription
+      allow read: if estAuthentifie();
+
+      // Création/modification : uniquement Hyzakam
+      allow create, update: if estHyzakam();
+
+      allow delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COLLECTION : stats_globales (statistiques et tableau économique)
+    // ═══════════════════════════════════════════════════════════════════════════
+    match /stats_globales/{statId} {
+      // Hyzakam peut lire les statistiques globales
+      allow read: if estHyzakam();
+
+      // Création/modification : uniquement Cloud Functions
+      allow create, update, delete: if false;
+    }
 
   }
 }
-

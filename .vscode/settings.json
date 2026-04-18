@@ -4,5 +4,8 @@
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
   },
-  "claudeCodeChat.permissions.yoloMode": false
+  "claudeCodeChat.permissions.yoloMode": false,
+  "search.useGlobalIgnoreFiles": true,
+  "search.useParentIgnoreFiles": false,
+  "search.useIgnoreFiles": false
 }

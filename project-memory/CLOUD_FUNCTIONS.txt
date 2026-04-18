@@ -1,15 +1,15 @@
 **CLOUD FUNCTIONS - CASHBACK PROPRETÉ**
 
 **addDepot** (functions/src/addDepot.js):
-- **Fonction**: Enregistre dépôt responsable → incrémente points citoyen + fill bac.
+- **Fonction**: Enregistre dépôt responsable → incrémente point citoyen + fill bac.
 - **Extrait**:
 ```js
 exports.addDepot = functions.https.onCall(async (data, context) => {
-  const { id_citoyen, id_agent, categorie, poids, point, bonus_tri } = data;
+  const { id_citoyen, id_agent, categorie, poids, point, bonus_trieee } = data;
   const batch = admin.firestore().batch();
   // Depot + user point + bac fill
   await batch.commit();
-  return { success: true, depotId, points };
+  return { success: true, depotId, point };
 });
 ```
 - **Fonctionnement**: Callable depuis app (responsable confirm). Auth check, batch writes (atomic). Logs errors.

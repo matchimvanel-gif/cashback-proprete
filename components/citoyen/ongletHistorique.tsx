@@ -1,164 +1,105 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
+// Onglet Historique — Dépôts du citoyen du plus récent au plus ancien
+import { Ionicons } from "@expo/vector-icons";
+import {
+    collection,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    where,
+} from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { couleur, stylesTitre } from "../../constants/animation";
 import { auth, db } from "../../firebaseConfig";
 
-interface Transaction {
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface Depot {
   id: string;
   date: string;
-  partenaire: string;
-  produit: string;
-  reduction: number;
-  points: number;
-  status: "validé" | "en_attente" | "refusé";
+  categorie: string;
+  poids: number;
+  pointsBase: number;
+  bonusTri: number;
+  totalPoints: number;
+  tri: boolean;
 }
 
+// ─── Composant principal ──────────────────────────────────────────────────────
+
 export default function OngletHistorique() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isFake, setIsFake] = useState(false);
+  const [depots, setDepots] = useState<Depot[]>([]);
+  const [chargement, setChargement] = useState(true);
+  const [totalPoints, setTotalPoints] = useState(0);
+
   const uid = auth.currentUser?.uid;
 
-  useEffect(() => {
-    chargerHistorique();
-  }, []);
-
-  async function chargerHistorique() {
-    if (!uid) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const q = query(
-        collection(db, "depots"),
-        where("uid_citoyen", "==", uid),
-        orderBy("date", "desc"),
-        // limit(20)
-      );
-      const snapshot = await getDocs(q);
-      const liste: Transaction[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          date: data.date.toDate().toLocaleDateString(),
-          partenaire: data.nom_etablissement || "Inconnu",
-          produit: data.produit || "Non spécifié",
-          reduction: data.reduction || 0,
-          points: data.points || 0,
-          status: data.statut || "validé",
-        };
-      });
-
-      setTransactions(liste);
-      await AsyncStorage.setItem("citoyen_historique", JSON.stringify(liste));
-      setIsFake(false);
-    } catch (error) {
-      console.log("Firebase historique error:", error);
-      try {
-        const cached = await AsyncStorage.getItem("citoyen_historique");
-        if (cached) {
-          setTransactions(JSON.parse(cached));
-          setIsFake(false);
-        } else {
-          utiliserDonneesFictives();
-        }
-      } catch {
-        utiliserDonneesFictives();
+  useEffect(
+    function () {
+      if (!uid) {
+        setChargement(false);
+        return;
       }
-    } finally {
-      setLoading(false);
-    }
-  }
 
-  function utiliserDonneesFictives() {
-    const fakeTransactions: Transaction[] = [
-      {
-        id: "1",
-        date: "01/10/2024",
-        partenaire: "Boutique Propre Bafoussam",
-        produit: "Savon Luxe",
-        reduction: 250,
-        points: 50,
-        status: "validé",
-      },
-      {
-        id: "2",
-        date: "02/10/2024",
-        partenaire: "Clean Shop",
-        produit: "Détergent Standard",
-        reduction: 100,
-        points: 25,
-        status: "validé",
-      },
-      {
-        id: "3",
-        date: "03/10/2024",
-        partenaire: "Hygiène Plus",
-        produit: "Eau de Javel",
-        reduction: 75,
-        points: 20,
-        status: "en_attente",
-      },
-    ];
-    setTransactions(fakeTransactions);
-    setIsFake(true);
-    Alert.alert("Info", "Historique fictif affiché");
-  }
+      // Écoute en temps réel — 50 derniers dépôts du citoyen
+      const qDepots = query(
+        collection(db, "depots"),
+        where("id_citoyen", "==", uid),
+        orderBy("date", "desc"),
+        limit(50),
+      );
 
-  const renderTransaction = ({ item }: { item: Transaction }) => (
-    <View
-      style={{
-        backgroundColor: "rgba(255,255,255,0.1)",
-        padding: 15,
-        borderRadius: 15,
-        marginBottom: 10,
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <Text
-          style={{ color: couleur.doreClair, fontWeight: "bold", fontSize: 16 }}
-        >
-          {item.produit} chez {item.partenaire}
-        </Text>
-        <View
-          style={{
-            backgroundColor:
-              item.status === "validé" ? couleur.turquoise : couleur.erreur,
-            paddingHorizontal: 10,
-            paddingVertical: 5,
-            borderRadius: 15,
-          }}
-        >
-          <Text style={{ color: couleur.blanc, fontWeight: "bold" }}>
-            {item.status}
-          </Text>
-        </View>
-      </View>
-      <Text
-        style={{
-          color: couleur.turquoise,
-          fontSize: 18,
-          fontWeight: "bold",
-          marginTop: 5,
-        }}
-      >
-        -{item.reduction} FCFA + {item.points} pts
-      </Text>
-      <Text style={{ color: "#ccc", fontSize: 14 }}>{item.date}</Text>
-    </View>
+      const desabonner = onSnapshot(
+        qDepots,
+        function (snap) {
+          const liste: Depot[] = [];
+          let total = 0;
+
+          snap.forEach(function (docDepot) {
+            const data = docDepot.data();
+            const dateDepot = data.date?.toDate
+              ? data.date.toDate()
+              : new Date();
+            const pts = data.totalPoints || data.points || 0;
+            total += pts;
+
+            liste.push({
+              id: docDepot.id,
+              date: dateDepot.toLocaleDateString("fr-FR", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              categorie: data.categorie || "Non spécifié",
+              poids: data.poids || 0,
+              pointsBase: data.pointsBase || 0,
+              bonusTri: data.bonusTri || 0,
+              totalPoints: pts,
+              tri: data.tri || false,
+            });
+          });
+
+          setDepots(liste);
+          setTotalPoints(total);
+          setChargement(false);
+        },
+        function (erreur) {
+          console.error("Erreur historique dépôts:", erreur);
+          setChargement(false);
+        },
+      );
+
+      return function () {
+        desabonner();
+      };
+    },
+    [uid],
   );
 
-  if (loading) {
+  if (chargement) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color={couleur.dore} />
@@ -167,30 +108,170 @@ export default function OngletHistorique() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      {isFake && (
-        <Text
-          style={{
-            color: couleur.erreur,
-            textAlign: "center",
-            marginBottom: 20,
-            fontWeight: "bold",
-            padding: 10,
-          }}
-        >
-          ⚠️ Données fictives
-        </Text>
-      )}
-
+    <ScrollView
+      style={{ flex: 1, padding: 16 }}
+      contentContainerStyle={{ paddingBottom: 30 }}
+    >
       <Text style={stylesTitre.titre}>Mon Historique</Text>
 
-      <FlatList
-        data={transactions}
-        renderItem={renderTransaction}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 20 }}
-        showsVerticalScrollIndicator={false}
-      />
-    </View>
+      {/* ── RÉSUMÉ TOTAL ── */}
+      <View
+        style={{
+          backgroundColor: "rgba(41,79,120,0.85)",
+          borderRadius: 20,
+          padding: 18,
+          marginBottom: 20,
+          borderWidth: 1,
+          borderColor: couleur.dore,
+          flexDirection: "row",
+          justifyContent: "space-around",
+          alignItems: "center",
+        }}
+      >
+        <View style={{ alignItems: "center" }}>
+          <Text
+            style={{ color: couleur.dore, fontSize: 28, fontWeight: "bold" }}
+          >
+            {depots.length}
+          </Text>
+          <Text style={{ color: "#ccc", fontSize: 12 }}>Dépôts totaux</Text>
+        </View>
+        <View
+          style={{
+            width: 1,
+            height: 40,
+            backgroundColor: "rgba(201,168,76,0.4)",
+          }}
+        />
+        <View style={{ alignItems: "center" }}>
+          <Text
+            style={{
+              color: couleur.turquoise,
+              fontSize: 28,
+              fontWeight: "bold",
+            }}
+          >
+            {totalPoints.toLocaleString("fr-FR")}
+          </Text>
+          <Text style={{ color: "#ccc", fontSize: 12 }}>Points gagnés</Text>
+        </View>
+      </View>
+
+      {/* ── LISTE DES DÉPÔTS ── */}
+      {depots.length === 0 ? (
+        <View
+          style={{
+            backgroundColor: "rgba(41,79,120,0.6)",
+            padding: 30,
+            borderRadius: 20,
+            alignItems: "center",
+            borderWidth: 1,
+            borderColor: "rgba(201,168,76,0.3)",
+          }}
+        >
+          <Ionicons name="trash-outline" size={40} color={couleur.dore} />
+          <Text style={{ color: "#ccc", marginTop: 10, textAlign: "center" }}>
+            Aucun dépôt enregistré.{"\n"}Vos dépôts apparaîtront ici.
+          </Text>
+        </View>
+      ) : (
+        depots.map(function (depot) {
+          return (
+            <View
+              key={depot.id}
+              style={{
+                backgroundColor: "rgba(41,79,120,0.8)",
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 12,
+                borderLeftWidth: 4,
+                borderLeftColor: depot.tri ? couleur.turquoise : couleur.dore,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      color: couleur.blanc,
+                      fontWeight: "bold",
+                      fontSize: 16,
+                    }}
+                  >
+                    {depot.categorie}
+                  </Text>
+                  <Text style={{ color: "#ccc", fontSize: 13, marginTop: 3 }}>
+                    {depot.poids}g • {depot.date}
+                  </Text>
+                  {depot.tri && (
+                    <Text
+                      style={{
+                        color: couleur.turquoise,
+                        fontSize: 12,
+                        marginTop: 4,
+                      }}
+                    >
+                      ♻️ Tri effectué — +{depot.bonusTri} pts bonus
+                    </Text>
+                  )}
+                </View>
+
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text
+                    style={{
+                      color: couleur.dore,
+                      fontWeight: "bold",
+                      fontSize: 20,
+                    }}
+                  >
+                    +{depot.totalPoints}
+                  </Text>
+                  <Text style={{ color: "#ccc", fontSize: 11 }}>points</Text>
+                </View>
+              </View>
+
+              {/* Détail des points si bonus tri */}
+              {depot.bonusTri > 0 && (
+                <View
+                  style={{
+                    marginTop: 10,
+                    flexDirection: "row",
+                    gap: 15,
+                    backgroundColor: "rgba(78,205,196,0.1)",
+                    padding: 8,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text style={{ color: "#ccc", fontSize: 12 }}>
+                    Base : {depot.pointsBase} pts
+                  </Text>
+                  <Text style={{ color: couleur.turquoise, fontSize: 12 }}>
+                    + Bonus tri : {depot.bonusTri} pts
+                  </Text>
+                </View>
+              )}
+            </View>
+          );
+        })
+      )}
+
+      {depots.length === 50 && (
+        <Text
+          style={{
+            color: "#ccc",
+            textAlign: "center",
+            fontSize: 12,
+            marginTop: 10,
+          }}
+        >
+          Affichage limité aux 50 derniers dépôts
+        </Text>
+      )}
+    </ScrollView>
   );
 }

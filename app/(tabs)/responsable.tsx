@@ -1,424 +1,222 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import { collection, doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { signOut } from "firebase/auth";
+import { ComponentProps, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
+  ImageBackground,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { couleur, stylesTitre } from "../../constants/animation";
-import { auth, db } from "../../firebaseConfig";
+import { SafeAreaView } from "react-native-safe-area-context";
+import OngletAccueil from "../../components/responsable/ongletAccueil";
+import OngletDepot from "../../components/responsable/ongletDepot";
+import OngletHistorique from "../../components/responsable/ongletHistorique";
+import OngletMonBac from "../../components/responsable/ongletMonBac";
+import { couleur } from "../../constants/animation";
+import { auth } from "../../firebaseConfig";
+import { router } from "expo-router";
 
-const STEPS = {
-  SCAN_CITOYEN: "scan_citoyen",
-  CATEGORIE: "categorie",
-  POIDS: "poids",
-  CONFIRMATION: "confirmation",
-} as const;
+export default function ecranResponsable() {
+  const [ongletActif, setOngletActif] = useState("accueil");
+  const [menuOuvert, setMenuOuvert] = useState(false);
 
-type Step = (typeof STEPS)[keyof typeof STEPS];
+  type NomIcone = ComponentProps<typeof Ionicons>["name"];
 
-type Configuration = {
-  categorie_mini: number[];
-  categorie_petit: number[];
-  categorie_moyen: number[];
-};
+  const onglets: { id: string; icone: NomIcone; iconeActif: NomIcone; label: string }[] = [
+    {
+      id: "accueil",
+      icone: "home-outline",
+      iconeActif: "home",
+      label: "Accueil",
+    },
+    {
+      id: "depots",
+      icone: "trash-outline",
+      iconeActif: "trash",
+      label: "Dépôts",
+    },
+    {
+      id: "historique",
+      icone: "time-outline",
+      iconeActif: "time",
+      label: "Historique",
+    },
+    {
+      id: "monBac",
+      icone: "cube-outline",
+      iconeActif: "cube",
+      label: "Mon Bac",
+    },
+  ];
 
-type Citoyen = {
-  uid: string;
-  nom: string;
-  quartier: string;
-  active: boolean;
-};
-
-export default function EcranResponsable() {
-  const [step, setStep] = useState<Step>("scan_citoyen");
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scannedUid, setScannedUid] = useState("");
-  const [citoyen, setCitoyen] = useState<Citoyen | null>(null);
-  const [categorie, setCategorie] = useState("");
-  const [poids, setPoids] = useState(0);
-  const [bonusTri, setBonusTri] = useState(false);
-  const [config, setConfig] = useState<Configuration | null>(null);
-  const [chargement, setChargement] = useState(false);
-  const uidAgent = auth.currentUser?.uid;
-
-  useEffect(function () {
-    chargerConfig();
-  }, []);
-
-  async function chargerConfig() {
-    try {
-      const snapConfig = await getDoc(doc(db, "configuration", "barème"));
-      if (snapConfig.exists()) {
-        setConfig(snapConfig.data() as Configuration);
-      }
-    } catch (e) {
-      console.log("Erreur config:", e);
+  function renduContenu() {
+    if (ongletActif === "accueil") {
+      return <OngletAccueil />;
+    }
+    if (ongletActif === "depots") {
+      return <OngletDepot />;
+    }
+    if (ongletActif === "historique") {
+      return <OngletHistorique />;
+    }
+    if (ongletActif === "monBac") {
+      return <OngletMonBac />;
     }
   }
 
-  async function handleScan(scanningResult: { data: string }) {
-    const data = scanningResult.data;
-
-    setScannedUid(data);
-    await chargerCitoyen(data);
-  }
-
-  async function chargerCitoyen(uid: string) {
+  async function Deconnexion() {
     try {
-      const snapCitoyen = await getDoc(doc(db, "utilisateurs", uid));
-      if (snapCitoyen.exists()) {
-        const data = snapCitoyen.data();
-        if (data.role === "citoyen" && data.active !== false) {
-          setCitoyen({
-            uid,
-            nom: data.nom || "Citoyen",
-            quartier: data.quartier || "",
-            active: true,
-          });
-          setStep("categorie");
-        } else {
-          Alert.alert("❌ Inéligible", "Ce compte n'est pas un citoyen actif.");
-        }
-      } else {
-        Alert.alert("❌ Citoyen inconnu", "Aucun compte trouvé.");
-      }
-    } catch (e) {
-      Alert.alert("Erreur", "Problème lecture citoyen.");
+      await signOut(auth);
+      router.replace("/login");
+    } catch (error) {
+      console.error("Erreur déconnexion:", error);
     }
-  }
-
-  async function calculerPoints(): Promise<number> {
-    if (!config || !categorie || poids === 0) return 0;
-    const options = config[
-      `categorie_${categorie}` as keyof Configuration
-    ] as number[];
-    const pointBase = options[poids - 1] || 0;
-    return bonusTri ? pointBase * 1.2 : pointBase;
-  }
-
-  async function confirmerDepot() {
-    if (!citoyen || !categorie || poids === 0 || !uidAgent) return;
-
-    setChargement(true);
-    try {
-      const points = await calculerPoints();
-      if (points === 0) {
-        Alert.alert("Erreur", "Configuration points manquante.");
-        return;
-      }
-
-      // Appel Cloud Function (évite rules complexes)
-      // Direct Firestore write (no Cloud Function needed)
-      const depotRef = doc(collection(db, "depots"));
-      await setDoc(depotRef, {
-        id_citoyen: citoyen.uid,
-        id_agent: uidAgent,
-        categorie,
-        poids,
-        point: points,
-        bonus_tri: bonusTri,
-        date: Timestamp.now(),
-      });
-      Alert.alert(
-        "✅ Dépôt enregistré",
-        `+${points} points pour ${citoyen.nom}`,
-      );
-      resetForm();
-    } catch (e: any) {
-      Alert.alert("Erreur", e.message || "Problème Cloud Function.");
-    } finally {
-      setChargement(false);
-    }
-  }
-
-  function resetForm() {
-    setStep("scan_citoyen");
-    setCitoyen(null);
-    setCategorie("");
-    setPoids(0);
-    setBonusTri(false);
-    setScannedUid("");
-  }
-
-  const categories = ["mini", "petit", "moyen", "grand"] as const;
-
-  if (!permission?.granted) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <Text style={{ color: couleur.blanc, marginBottom: 20 }}>
-          Permission caméra requise
-        </Text>
-        <TouchableOpacity
-          onPress={requestPermission}
-          style={{
-            backgroundColor: couleur.dore,
-            padding: 15,
-            borderRadius: 10,
-          }}
-        >
-          <Text style={{ color: couleur.marine, fontWeight: "bold" }}>
-            Accorder
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
   }
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
-      <Text style={stylesTitre.titre}>Dépôt Responsable</Text>
-
-      {step === "scan_citoyen" && (
-        <View style={{ flex: 1, justifyContent: "center" }}>
-          <CameraView
-            style={{ flex: 1, borderRadius: 20, marginBottom: 20 }}
-            onBarcodeScanned={handleScan}
-            barcodeScannerSettings={{
-              barcodeTypes: ["qr"],
+    <ImageBackground
+      source={require("../../image/abstrait-bleu-or-moderne-formes-courbes-bleu-marine-fonce-or-fond-lignes-luxe-elegance-conception-modele-abstrait-conception-pour-presentation-banniere-couverture_181182-15981.jpg")}
+      resizeMode="cover"
+      style={{ flex: 1, width: "100%", height: "100%" }}
+    >
+      <SafeAreaView style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}>
+        {/* Header avec titre et menu */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingHorizontal: 20,
+            paddingVertical: 15,
+            borderBottomWidth: 1,
+            borderBottomColor: couleur.dore,
+          }}
+        >
+          <Text
+            style={{
+              color: couleur.doreClair,
+              fontSize: 18,
+              fontWeight: "bold",
+              marginTop: 15,
             }}
-          />
-          <Text style={{ color: couleur.blanc, textAlign: "center" }}>
-            Scanner QR du citoyen
+          >
+            Cashback Propreté
           </Text>
-        </View>
-      )}
 
-      {step === "categorie" && citoyen && (
-        <View>
-          <View style={{ alignItems: "center", marginBottom: 20 }}>
-            <Text
-              style={{
-                color: couleur.doreClair,
-                fontWeight: "bold",
-                fontSize: 18,
-              }}
-            >
-              {citoyen.nom}
-            </Text>
-            <Text style={{ color: "#ccc" }}>{citoyen.quartier}</Text>
+          <TouchableOpacity onPress={function () {
+            setMenuOuvert(!menuOuvert);
+          }}>
             <Ionicons
-              name="checkmark-circle"
-              size={24}
-              color={couleur.turquoise}
+              name="menu"
+              size={28}
+              color={couleur.dore}
+              style={{ marginTop: 15 }}
             />
-          </View>
-
-          <Text style={stylesTitre.sousTitre}>Catégorie de déchets</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginBottom: 20 }}
-          >
-            {categories.map(function (cat) {
-              return (
-                <TouchableOpacity
-                  key={cat}
-                  style={{
-                    backgroundColor: couleur.marineTransparent,
-                    borderRadius: 12,
-                    padding: 16,
-                    marginRight: 12,
-                    minWidth: 100,
-                    borderWidth: 2,
-                    borderColor:
-                      categorie === cat ? couleur.dore : "transparent",
-                  }}
-                  onPress={function () {
-                    setCategorie(cat);
-                    setStep("poids");
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: couleur.blanc,
-                      textAlign: "center",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {cat.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
-
-      {step === "poids" && categorie && citoyen && config && (
-        <View>
-          <Text style={stylesTitre.sousTitre}>
-            Poids ({categorie.toUpperCase()})
-          </Text>
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 10,
-              marginBottom: 20,
-              justifyContent: "center",
-            }}
-          >
-            {(
-              config[
-                `categorie_${categorie}` as keyof Configuration
-              ] as number[]
-            ).map(function (p, index) {
-              return (
-                <TouchableOpacity
-                  key={index}
-                  style={{
-                    backgroundColor: couleur.marineTransparent,
-                    borderRadius: 12,
-                    padding: 16,
-                    minWidth: 80,
-                    borderWidth: 2,
-                    borderColor:
-                      poids === index + 1 ? couleur.dore : "transparent",
-                  }}
-                  onPress={function () {
-                    setPoids(index + 1);
-                    setStep("confirmation");
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: couleur.blanc,
-                      textAlign: "center",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {p} pts
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
-      {step === "confirmation" && citoyen && categorie && poids > 0 && (
-        <View>
-          <Text style={stylesTitre.sousTitre}>Confirmer le dépôt</Text>
-          <View
-            style={{
-              backgroundColor: couleur.marineTransparent,
-              borderRadius: 16,
-              padding: 20,
-              marginBottom: 20,
-              borderWidth: 1,
-              borderColor: couleur.dore,
-            }}
-          >
-            <Text style={{ color: couleur.blanc, fontWeight: "bold" }}>
-              Citoyen
-            </Text>
-            <Text style={{ color: "#ccc" }}>
-              {citoyen.nom} - {citoyen.quartier}
-            </Text>
-            <Text
-              style={{
-                color: couleur.blanc,
-                fontWeight: "bold",
-                marginTop: 12,
-              }}
-            >
-              Dépôt
-            </Text>
-            <Text style={{ color: "#ccc" }}>
-              {categorie.toUpperCase()} - {poids}kg
-            </Text>
-            <Text
-              style={{
-                color: couleur.turquoise,
-                fontSize: 18,
-                fontWeight: "bold",
-                marginTop: 12,
-              }}
-            >
-              {calculerPoints()} points
-            </Text>
-            {bonusTri && (
-              <Text style={{ color: couleur.vert, fontSize: 12 }}>
-                +20% bonus tri
-              </Text>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={{
-              backgroundColor: bonusTri
-                ? couleur.vert
-                : couleur.marineTransparent,
-              borderRadius: 12,
-              padding: 16,
-              marginBottom: 12,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              borderWidth: 2,
-              borderColor: couleur.turquoise,
-            }}
-            onPress={function () {
-              setBonusTri(!bonusTri);
-            }}
-          >
-            <Ionicons
-              name={bonusTri ? "checkmark-circle" : "radio-button-off"}
-              size={24}
-              color={couleur.turquoise}
-            />
-            <Text style={{ color: couleur.blanc, fontWeight: "bold" }}>
-              Bonus tri sélectif (+20%)
-            </Text>
           </TouchableOpacity>
+        </View>
 
-          <TouchableOpacity
+        {/* Menu hamburger */}
+        {menuOuvert && (
+          <View
             style={{
-              backgroundColor: couleur.dore,
-              borderRadius: 16,
-              padding: 20,
-              alignItems: "center",
+              position: "absolute",
+              top: 65,
+              right: 0,
+              backgroundColor: couleur.marine,
+              borderLeftWidth: 1,
+              borderBottomWidth: 1,
+              borderColor: couleur.dore,
+              borderBottomLeftRadius: 20,
+              paddingVertical: 10,
+              zIndex: 999,
+              width: 200,
             }}
-            onPress={confirmerDepot}
-            disabled={chargement}
           >
-            {chargement ? (
-              <ActivityIndicator color={couleur.marine} />
-            ) : (
-              <Text
-                style={{
-                  color: couleur.marine,
-                  fontWeight: "bold",
-                  fontSize: 18,
+            <TouchableOpacity
+              style={{ padding: 15, flexDirection: "row", gap: 10 }}
+            >
+              <Ionicons
+                name="settings-outline"
+                size={20}
+                color={couleur.dore}
+              />
+              <Text style={{ color: couleur.blanc }}>Paramètres</Text>
+            </TouchableOpacity>
+
+            <View
+              style={{
+                height: 1,
+                backgroundColor: "rgba(255,255,255,0.2)",
+                marginHorizontal: 15,
+              }}
+            />
+
+            <TouchableOpacity
+              style={{ padding: 15, flexDirection: "row", gap: 10 }}
+              onPress={Deconnexion}
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={20}
+                color={couleur.erreur}
+              />
+              <Text style={{ color: couleur.erreur }}>Déconnexion</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Contenu principal */}
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+          <View style={{ flex: 1 }}>
+            {renduContenu()}
+          </View>
+        </ScrollView>
+
+        {/* Barre d'onglets en bas */}
+        <View
+          style={{
+            flexDirection: "row",
+            backgroundColor: couleur.marine,
+            borderTopWidth: 1,
+            borderTopColor: couleur.dore,
+            paddingBottom: 10,
+            paddingTop: 8,
+          }}
+        >
+          {onglets.map(function (onglet) {
+            return (
+              <TouchableOpacity
+                key={onglet.id}
+                style={{ flex: 1, alignItems: "center", paddingVertical: 5 }}
+                onPress={function () {
+                  setOngletActif(onglet.id);
                 }}
               >
-                Confirmer le dépôt
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{
-              backgroundColor: couleur.erreur,
-              borderRadius: 12,
-              padding: 12,
-              alignItems: "center",
-              marginTop: 12,
-            }}
-            onPress={resetForm}
-          >
-            <Text style={{ color: couleur.blanc }}>Annuler</Text>
-          </TouchableOpacity>
+                <Ionicons
+                  name={
+                    ongletActif === onglet.id
+                      ? onglet.iconeActif
+                      : onglet.icone
+                  }
+                  size={22}
+                  color={ongletActif === onglet.id ? couleur.dore : "#ccc"}
+                />
+                <Text
+                  style={{
+                    fontSize: 10,
+                    color: ongletActif === onglet.id ? couleur.dore : "#ccc",
+                    fontWeight: ongletActif === onglet.id ? "bold" : "normal",
+                    marginTop: 2,
+                  }}
+                >
+                  {onglet.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-      )}
-
-      <View style={{ height: 60 }} />
-    </ScrollView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }

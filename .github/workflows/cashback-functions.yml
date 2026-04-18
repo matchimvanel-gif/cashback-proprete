@@ -1,33 +1,112 @@
-name: Deploy Cloud Functions + Renouveler Contrats
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║     CASHBACK PROPRETÉ — GITHUB ACTIONS WORKFLOW                         ║
+# ║     Déploie les Cloud Functions + lance les crons planifiés              ║
+# ║     Fichier : .github/workflows/cashback-functions.yml                  ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+#
+# SECRETS GITHUB À CONFIGURER dans Settings > Secrets > Actions :
+#   FIREBASE_TOKEN         → obtenu via : firebase login:ci
+#   FIREBASE_PROJECT_ID    → cash-back-de-proprete
+#   FIREBASE_CLIENT_EMAIL  → depuis la clé de service Firebase
+#   FIREBASE_PRIVATE_KEY   → depuis la clé de service Firebase
+
+name: Deploy Cloud Functions + Crons Cashback
 
 on:
-  schedule:
-    - cron: '0 0 * * *'       # Renouvellement contrats : tous les jours à minuit
-    - cron: '0 */1 * * *'     # Analyse responsables suspects : toutes les heures
+  # Déploiement automatique quand functions/index.js change sur la branche main
   push:
     branches:
+      - main
       - essaie2
     paths:
-      - 'functions/cashback-functions/**'        # Redéploie uniquement si functions/ a changé
-  workflow_dispatch:           # Lancement manuel depuis GitHub
+      - 'functions/index.js'
+      - 'functions/package.json'
+      - 'scripts/**'
+      - '.github/workflows/cashback-functions.yml'
 
+  # ─── CRONS PLANIFIÉS ───────────────────────────────────────────────────────
+  schedule:
+    # Renouvellement des contrats : tous les jours à minuit (heure Douala = UTC+1)
+    - cron: '0 23 * * *'    # 23h UTC = minuit heure Cameroun
+
+    # Analyse des responsables suspects : toutes les heures
+    - cron: '0 * * * *'
+
+  # Lancement manuel depuis l'interface GitHub (pour tests ou urgences)
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action à exécuter'
+        required: true
+        default: 'renouveler-contrats'
+        type: choice
+        options:
+          - renouveler-contrats
+          - analyser-responsables
+          - tout
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# JOB 1 — Déployer les Cloud Functions sur Firebase
+# Déclenché uniquement lors d'un push (pas par les crons)
+# ═══════════════════════════════════════════════════════════════════════════════
 jobs:
+  # deploy-functions:
+  #   name: Déployer Cloud Functions Firebase
+  #   runs-on: ubuntu-latest
+  #   # Ce job ne tourne QUE lors d'un push, pas des crons
+  #   if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
 
-  # JOB 2 — Renouveler les contrats établissements
-  # ─────────────────────────────────────────────────────
+  #   steps:
+  #     - name: Checkout du code
+  #       uses: actions/checkout@v4
+
+  #     - name: Installer Node.js 18
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '18'
+  #         cache: 'npm'
+  #         cache-dependency-path: functions/package-lock.json
+
+  #     - name: Installer les dépendances Firebase Functions
+  #       run: |
+  #         cd functions
+  #         npm ci || npm install
+
+  #     - name: Installer Firebase CLI
+  #       run: npm install -g firebase-tools
+
+  #     - name: Déployer les Cloud Functions
+  #       env:
+  #         FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+  #       run: |
+  #         firebase deploy --only functions \
+  #           --project ${{ secrets.FIREBASE_PROJECT_ID }} \
+  #           --token "$FIREBASE_TOKEN" \
+  #           --non-interactive
+  #       # En cas d'échec du déploiement, GitHub notifie par email
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# JOB 2 — Renouveler les contrats des établissements
+# Tourne tous les jours à minuit heure Cameroun
+# ═══════════════════════════════════════════════════════════════════════════════
   renouveler-contrats:
+    name: Renouveler contrats établissements
     runs-on: ubuntu-latest
+    # Tourne : cron minuit OU dispatch manuel avec action contrats OU action tout
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 23 * * *') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'renouveler-contrats' || github.event.inputs.action == 'tout'))
 
     steps:
-      - name: Checkout code
+      - name: Checkout du code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Installer Node.js 18
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - name: Installer les dépendances scripts
+      - name: Installer les dépendances du script
         run: |
           cd scripts
           npm install
@@ -40,3 +119,38 @@ jobs:
         run: |
           cd scripts
           node renouveler-contrats.js
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# JOB 3 — Analyser les responsables suspects
+# Tourne toutes les heures
+# ═══════════════════════════════════════════════════════════════════════════════
+  analyser-responsables:
+    name: Analyser responsables suspects
+    runs-on: ubuntu-latest
+    # Tourne : cron horaire OU dispatch manuel avec action responsables OU tout
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 * * * *') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'analyser-responsables' || github.event.inputs.action == 'tout'))
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Installer les dépendances du script
+        run: |
+          cd scripts
+          npm install
+
+      - name: Lancer l'analyse des responsables suspects
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+        run: |
+          cd scripts
+          node analyser-responsables.js

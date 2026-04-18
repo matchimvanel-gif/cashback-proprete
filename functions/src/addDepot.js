@@ -11,7 +11,7 @@ exports.addDepot = functions.https.onCall(async (data, context) => {
     );
   }
 
-  const { id_citoyen, id_agent, categorie, poids, point, bonus_tri } = data;
+  const { id_citoyen, id_agent, categorie, poids, point, bonus_trieee } = data;
 
   // Validation
   if (!id_citoyen || !id_agent || !categorie || poids <= 0 || point <= 0) {
@@ -31,8 +31,8 @@ exports.addDepot = functions.https.onCall(async (data, context) => {
       id_agent,
       categorie,
       poids,
-      point,
-      bonus_tri: !!bonus_tri,
+      points,
+      bonus_trieee: !!bonus_trieee,
       date: admin.firestore.Timestamp.now(),
     });
 
@@ -42,7 +42,7 @@ exports.addDepot = functions.https.onCall(async (data, context) => {
       .collection("utilisateurs")
       .doc(id_citoyen);
     batch.update(userRef, {
-      point: admin.firestore.FieldValue.increment(point),
+      points: admin.firestore.FieldValue.increment(point),
     });
 
     // Update bac fill (if exists)

@@ -71,7 +71,7 @@
 │   └── constant/
 ├── functions/  # Firebase Functions
 │   ├── index.js  # Existing analysis
-│   ├── src/addDepot.js  # New: depot + points + bac
+│   ├── src/addDepot.js  # New: depot + point + bac
 │   └── update-montant-contrat1/
 ├── hooks/
 │   ├── use-color-scheme.ts
@@ -86,29 +86,3 @@
 ├── scripts/
 └── src/dataconnect-generated/
 ```
-
-**État par phase (PLAN_PROJET_2_SEMAINES.md)**:
-**Phase 1 ✓**: hyzakam/ongletStatistiques refactored (no arrow/ternary, limit(50)), ongletGains créé, animation.ts fixed.
-**Phase 2 ⏳**: citoyen/ongletCoupons (depots→coupons, expo-camera), Historique/Points pending.
-**Phase 3 ✓**: responsable.tsx full (QR→catégorie/poids/tri→depot, expo-camera, direct Firestore).
-**Phase 4 ⏳**: etablissement.tsx null → create scanner coupon.
-
-**Problèmes VSCode/Expo**:
-
-- ✅ Fixed (syntax, imports, scanningResult: any → non-async).
-- Expo deps aligned (`npx expo install --fix`).
-
-**Fichiers critiques**:
-
-- firebaseConfig.js: Config OK.
-- firestore.rules: Copy from project-memory/.
-- package.json: Expo 55.0.14 OK.
-
-**Deploy prêt**:
-
-```
-firebase deploy --only functions firestore:rules
-npx expo start
-```
-
-**Recommandation**: Phase 2 (citoyen) next → `npx expo start` test maintenant!

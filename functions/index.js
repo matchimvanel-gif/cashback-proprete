@@ -8,7 +8,7 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 // Limite simple pour éviter trop d'instances
-functions.setGlobalOptions({maxInstances: 10});
+functions.setGlobalOptions({ maxInstances: 10 });
 
 /**
  * Petit helper pour convertir une date Firestore/JS en Date JS.
@@ -46,7 +46,7 @@ function cleJour(date) {
 
 /**
  * Compte les dépôts par responsable sur une période donnée.
- * Le projet peut utiliser id_agent, responsableId ou respoID selon les données.
+ * Le projet peut utiliser id_agent, id_agent ou respoID selon les données.
  */
 async function compterDepotsParResponsable(dateDebut, dateFin) {
   const snapshot = await db
@@ -59,18 +59,17 @@ async function compterDepotsParResponsable(dateDebut, dateFin) {
 
   snapshot.forEach((document) => {
     const depot = document.data();
-    const responsableId =
-      depot.id_agent || depot.responsableId || depot.respoID || null;
+    const id_agent = depot.id_agent || depot.id_agent || depot.respoID || null;
 
-    if (!responsableId) {
+    if (!id_agent) {
       return;
     }
 
-    if (!comptes[responsableId]) {
-      comptes[responsableId] = 0;
+    if (!comptes[id_agent]) {
+      comptes[id_agent] = 0;
     }
 
-    comptes[responsableId] += 1;
+    comptes[id_agent] += 1;
   });
 
   return comptes;
@@ -80,7 +79,7 @@ async function compterDepotsParResponsable(dateDebut, dateFin) {
  * Calcule une moyenne journalière simple sur les 7 jours précédents.
  * On ignore aujourd'hui pour comparer le volume du jour à l'habitude récente.
  */
-async function calculerMoyenneGlissanteResponsable(responsableId, debutAujourdHui) {
+async function calculerMoyenneGlissanteResponsable(id_agent, debutAujourdHui) {
   const debutHistorique = new Date(debutAujourdHui);
   debutHistorique.setDate(debutHistorique.getDate() - 7);
 
@@ -97,10 +96,9 @@ async function calculerMoyenneGlissanteResponsable(responsableId, debutAujourdHu
 
   snapshot.forEach((document) => {
     const depot = document.data();
-    const idTrouve =
-      depot.id_agent || depot.responsableId || depot.respoID || null;
+    const idTrouve = depot.id_agent || depot.id_agent || depot.respoID || null;
 
-    if (idTrouve !== responsableId) {
+    if (idTrouve !== id_agent) {
       return;
     }
 
@@ -133,9 +131,9 @@ async function calculerMoyenneGlissanteResponsable(responsableId, debutAujourdHu
 /**
  * Essaie de retrouver le nom du responsable dans la collection utilisateurs.
  */
-async function recupererNomResponsable(responsableId) {
+async function recupererNomResponsable(id_agent) {
   try {
-    const utilisateur = await db.collection("utilisateurs").doc(responsableId).get();
+    const utilisateur = await db.collection("utilisateurs").doc(id_agent).get();
 
     if (!utilisateur.exists) {
       return "Responsable inconnu";
@@ -154,7 +152,7 @@ async function recupererNomResponsable(responsableId) {
  * Le document est stable par responsable + jour pour éviter les doublons.
  */
 async function creerOuMettreAJourAlerte({
-  responsableId,
+  id_agent,
   nom,
   multiplicateur,
   occurence,
@@ -163,11 +161,11 @@ async function creerOuMettreAJourAlerte({
 }) {
   const aujourdHui = new Date();
   const jour = cleJour(aujourdHui);
-  const alerteId = `${responsableId}_${jour}`;
+  const alerteId = `${id_agent}_${jour}`;
 
   const donneesAlerte = {
     nom,
-    responsableId,
+    id_agent,
     multiplicateur,
     occurence,
     date: admin.firestore.Timestamp.fromDate(aujourdHui),
@@ -177,7 +175,10 @@ async function creerOuMettreAJourAlerte({
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
-  await db.collection("alertes").doc(alerteId).set(donneesAlerte, {merge: true});
+  await db
+    .collection("alertes")
+    .doc(alerteId)
+    .set(donneesAlerte, { merge: true });
 }
 
 /**
@@ -197,22 +198,22 @@ async function analyserResponsablesSuspects() {
 
   const comptesDuJour = await compterDepotsParResponsable(
     debutAujourdHui,
-    finAujourdHui
+    finAujourdHui,
   );
 
   const responsables = Object.keys(comptesDuJour);
   let nombreAlertes = 0;
 
-  for (const responsableId of responsables) {
-    const depotsAujourdHui = comptesDuJour[responsableId];
+  for (const id_agent of responsables) {
+    const depotsAujourdHui = comptesDuJour[id_agent];
 
     if (depotsAujourdHui < 5) {
       continue;
     }
 
     const historique = await calculerMoyenneGlissanteResponsable(
-      responsableId,
-      debutAujourdHui
+      id_agent,
+      debutAujourdHui,
     );
 
     if (historique.nbJoursAvecActivite < 2 || historique.moyenne <= 0) {
@@ -226,10 +227,10 @@ async function analyserResponsablesSuspects() {
       continue;
     }
 
-    const nom = await recupererNomResponsable(responsableId);
+    const nom = await recupererNomResponsable(id_agent);
 
     await creerOuMettreAJourAlerte({
-      responsableId,
+      id_agent,
       nom,
       multiplicateur,
       occurence: depotsAujourdHui,
@@ -256,7 +257,7 @@ exports.addMontantToExistingEtablissements = functions.https.onCall(
     if (!context.auth || context.auth.uid !== "cJdPoZIqE8a6hnSmPNO348TB2hI2") {
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Accès réservé à l'admin"
+        "Accès réservé à l'admin",
       );
     }
 
@@ -264,7 +265,7 @@ exports.addMontantToExistingEtablissements = functions.https.onCall(
     const snapshot = await etablissementsRef.get();
 
     if (snapshot.empty) {
-      return {success: true, message: "Aucun établissement trouvé"};
+      return { success: true, message: "Aucun établissement trouvé" };
     }
 
     const maintenant = admin.firestore.Timestamp.now();
@@ -294,11 +295,10 @@ exports.addMontantToExistingEtablissements = functions.https.onCall(
 
     return {
       success: true,
-      message:
-        `${updatedCount} établissements ont été mis à jour avec montantContrat = 25000 et dateRenouvellement.`,
+      message: `${updatedCount} établissements ont été mis à jour avec montantContrat = 25000 et dateRenouvellement.`,
       updatedCount,
     };
-  }
+  },
 );
 
 /**
@@ -309,12 +309,12 @@ exports.detecterResponsablesSuspects = functions.https.onCall(
     if (!context.auth) {
       throw new functions.https.HttpsError(
         "unauthenticated",
-        "Connexion requise"
+        "Connexion requise",
       );
     }
 
     return analyserResponsablesSuspects();
-  }
+  },
 );
 
 /**

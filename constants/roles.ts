@@ -1,3 +1,4 @@
+import {Href} from 'expo-router'
 export const ROLES = {
   citoyen: 'citoyen',
   responsable: 'responsable',
@@ -14,12 +15,12 @@ export const ROLE_LABELS: Record<Role, string> = {
   [ROLES.hyzakam]: 'Hyzakam',
 }
 
-export const ROLE_ROUTES: Record<Role, '/(tabs)/citoyen' | '/(tabs)/responsable' | '/(tabs)/etablissement' | '/(tabs)/hyzakam'> = {
-  [ROLES.citoyen]: '/(tabs)/citoyen',
-  [ROLES.responsable]: '/(tabs)/responsable',
-  [ROLES.etablissement]: '/(tabs)/etablissement',
-  [ROLES.hyzakam]: '/(tabs)/hyzakam',
-}
+export const ROLE_ROUTES= {
+  [ROLES.citoyen]: '/(tabs)/citoyen' as const,
+  [ROLES.responsable]: '/(tabs)/responsable' as const,
+  [ROLES.etablissement]: '/(tabs)/etablissement'as const,
+  [ROLES.hyzakam]: '/(tabs)/hyzakam'as const,
+} as const 
 
 export const INSCRIPTION_ROLES = [
   ROLES.citoyen,

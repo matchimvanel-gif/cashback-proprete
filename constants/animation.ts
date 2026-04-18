@@ -3,6 +3,7 @@ import { useRef } from 'react'
 
 export const couleur = {
     marine: '#294f78',
+    bleuFoncer:'rgba(22, 58, 96, 0.85)',
     marineTransparent:'rgba(41,79,120,0.7)',
     dore: '#C9A84C',
     doreClair: '#F5D98B',

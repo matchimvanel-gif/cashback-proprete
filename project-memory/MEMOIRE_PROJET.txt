@@ -12,8 +12,8 @@
 **Collections exactes** (from info_contexte_projet.txt + screenshots):
 - utilisateurs: uid, role, point, total_reductions, email, nom, quartier, ville.
 - depots: id_citoyen, id_agent, date (Timestamp), point.
-- coupons: id_citoyen, code, points, statut (disponible/utilisé/expiré), id_etablissement, offre, utilise (bool).
-- etablissements: createAt, id_contrat, id_etablissement, nom, produit_luxe[], produit_standard[], montantContrat (25000 default), updateAt, dateRenouvellement.
+- coupons: id_citoyen, code, point, statut (disponible/utilise/expiré), id_etablissement, offre, utilise (bool).
+- etablissements: createdAt, id_contrat, id_etablissement, nom, produit_luxe[], produit_standard[], montantContrat (25000 default), updateAt, dateRenouvellement.
 - alertes: nom, multiplicateur, date, traite, occurence.
 - configuration: zones (villes/quartiers), categorie_mini/petit/moyen (bonus_trie, nom, option_poids, point_correspondant).
 - bacs (id = uid responsable): capacite_max, derniere_collecte, etat, localisation, remplissage_actuel (0-100).

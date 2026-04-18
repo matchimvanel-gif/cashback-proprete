@@ -7,7 +7,7 @@
 - Ajouter implémentation vue "responsables" (liste RespoID, bacs, alertes)
 
 ## Étape 2: Créer app/(tabs)/responsable.tsx [DONE ✓]
-- Dashboard responsable: status bacs (remplissage_actuel), depots, signalements bac_plein
+- Dashboard responsable: statut bacs (remplissage_actuel), depots, signalements bac_plein
 
 ## Étape 3: Updater firestore.rules [DONE ✓]
 - Permissions RespoID/bacs (hyzakam RW, responsables read own)

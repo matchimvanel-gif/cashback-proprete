@@ -6,6 +6,8 @@ import { doc, getDoc,setDoc,collection,query,where,getDocs,updateDoc,Timestamp} 
 import { auth, db } from '../firebaseConfig'
 import { couleur, utiliserAnimationEntree} from "../constants/animation"
 import { INSCRIPTION_ROLES, ROLE_LABELS, ROLE_ROUTES, ROLES, type Role } from '../constants/roles'
+import {Href} from 'expo-router'
+import { appelGenererCoupons } from "../constants/api";
 
 const SEUIL_MINIMAL = 25000
 
@@ -72,7 +74,7 @@ export default function ecranRegister(){
         setVerifiant(true);
         try {
             const q = query(collection(db, 'partenaires'), 
-                        where('Id_contrat', '==', codeSaisi),
+                        where('id_contrat', '==', codeSaisi),
                         where('email', '==', email));
             
             const querySnapshot = await getDocs(q);
@@ -97,7 +99,7 @@ export default function ecranRegister(){
             alert(e.message);
         }
     }
-
+// Fonction pour re-authentifier + supprimer
     async function chargeDonnee(){
         try{
             const snapshotVilleQuatier= await getDoc(doc(db,'configuration','zones'))
@@ -120,7 +122,7 @@ export default function ecranRegister(){
         setCharge(true);
         demarrerProgression();
         try {
-            const q = query(collection(db, 'partenaires'), where('Id_contrat', '==', idContrat));
+            const q = query(collection(db, 'partenaires'), where('id_contrat', '==', idContrat));
             const snapshot = await getDocs(q);
 
             if (snapshot.empty) {
@@ -262,7 +264,7 @@ export default function ecranRegister(){
                 quartier: role==='citoyen'? quartier:'',
                 date_creation:Timestamp.now(),
             })
-
+            await appelGenererCoupons(uid);
             if (role === 'etablissement') {
                 const produitsStandard = produits
                     .filter(p => p.type === 'standard')
@@ -293,8 +295,8 @@ export default function ecranRegister(){
                     produit_luxe: produitsLuxe,
                     montantContrat:role==='etablissement'?SEUIL_MINIMAL:0,
                     dateRenouvellement:maintenant,
-                    createAt:maintenant,
-                    updateAt:maintenant,
+                    createdAt: maintenant,
+                    updatedAt: maintenant,
                 })
             }
             // ÉTAPE 4 — Marquer le code comme utilisé
@@ -309,13 +311,9 @@ export default function ecranRegister(){
             }
 
             // ÉTAPE 5 — Rediriger selon le rôle
-            router.replace(ROLE_ROUTES[role])
+            router.replace(ROLE_ROUTES[role] as Href) 
 
         } catch (e: any) {
-            // Si l'écriture échoue, on nettoie le compte Auth créé juste avant
-            if (e.code === 'permission-denied' && auth.currentUser) {
-                await auth.currentUser.delete();
-            }
             // Gestion des messages d'erreur
             if (e.code === 'auth/email-already-in-use') {
                 afficherErreurTemporaire('Cet email est déjà utilisé.');

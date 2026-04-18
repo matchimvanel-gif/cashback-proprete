@@ -1,19 +1,16 @@
 // Hyzakam@gmail.com  Hyzakam1234 http://localhost:8081/hyzakam
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import {
-    ImageBackground,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View,
-} from "react-native";
+import {ImageBackground,ScrollView,Text,TouchableOpacity,View,} from "react-native";
+import { signOut } from 'firebase/auth'
+import { auth } from '../../firebaseConfig'
 import { SafeAreaView } from "react-native-safe-area-context";
 import OngletAccueil from "../../components/hyzakam/ongletAcceuil";
 import OngletPartenaires from "../../components/hyzakam/ongletPartenaires";
 import OngletResponsables from "../../components/hyzakam/ongletResponsables";
 import OngletStatistiques from "../../components/hyzakam/ongletStatistiques";
 import { couleur } from "../../constants/animation";
+import { router } from 'expo-router'
 
 export default function ecranHyzakam() {
   const [ongletActif, setOngletActif] = useState("accueil");
@@ -52,7 +49,14 @@ export default function ecranHyzakam() {
     if (ongletActif === "responsables") return <OngletResponsables />;
     if (ongletActif === "statistiques") return <OngletStatistiques />;
   }
-
+  async function Deconnexion(){
+    try {
+          await signOut(auth)
+          router.replace('/login')
+        } catch (error) {
+          console.error('Erreur déconnexion:', error)
+        }
+  }
   return (
     <ImageBackground
       source={require("../../image/abstrait-bleu-or-moderne-formes-courbes-bleu-marine-fonce-or-fond-lignes-luxe-elegance-conception-modele-abstrait-conception-pour-presentation-banniere-couverture_181182-15981.jpg")}
@@ -135,6 +139,7 @@ export default function ecranHyzakam() {
 
             <TouchableOpacity
               style={{ padding: 15, flexDirection: "row", gap: 10 }}
+              onPress={Deconnexion}
             >
               <Ionicons
                 name="log-out-outline"
